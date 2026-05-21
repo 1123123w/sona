@@ -85,6 +85,7 @@ let tierByChampionId = new Map<number, ChampionTierStats>()
 let currentSession: ChampSelectSession | null = null
 let currentCacheKey = ''
 let loadToken = 0
+let cacheClearListenerInstalled = false
 const tierCache = new Map<string, TierCacheEntry>()
 
 function normalizeOpggTier(value: string): OpggTier {
@@ -474,9 +475,15 @@ export function updateChampSelectTierBadge(enabled: boolean) {
   }
 }
 
-window.addEventListener(OPGG_CACHE_CLEARED_EVENT, () => {
+function handleOpggCacheCleared() {
   tierCache.clear()
   currentCacheKey = ''
   tierByChampionId = new Map()
   if (currentSession) void loadTierData(currentSession)
-})
+}
+
+export function installOpggTierCacheClearHandler() {
+  if (cacheClearListenerInstalled) return
+  cacheClearListenerInstalled = true
+  window.addEventListener(OPGG_CACHE_CLEARED_EVENT, handleOpggCacheCleared)
+}

@@ -1,34 +1,39 @@
-import { useState, useEffect, useMemo } from 'react'
+import { lazy, Suspense, useState, useEffect, useMemo, type ReactNode } from 'react'
 import '@/styles/App.css'
 import { logger } from '.'
 import { Modal } from '@/components/ui/Modal'
 import { Sidebar, type SidebarItem } from '@/components/ui/Sidebar'
 import { HomePage } from '@/components/pages/HomePage'
-import { ToolsPage } from '@/components/pages/ToolsPage'
-import { SettingsPage } from '@/components/pages/SettingsPage'
-import { AboutPage } from '@/components/pages/AboutPage'
-import { DebugPage } from '@/components/pages/DebugPage'
-import { UpdatePage } from '@/components/pages/UpdatePage'
 import { HomeIcon, GamepadIcon, SettingsIcon, InfoIcon, BugIcon, ZapIcon } from '@/components/ui/icons'
 import { onModalVisibilityChange, isModalVisible, closeModal } from '@/lib/modal'
 import { store } from '@/lib/store'
 import { getUpdateState, onUpdateStateChange, type UpdateState } from '@/lib/update-checker'
 import { useI18n } from '@/lib/i18n'
 
+const ToolsPage = lazy(() => import('@/components/pages/ToolsPage').then((module) => ({ default: module.ToolsPage })))
+const SettingsPage = lazy(() => import('@/components/pages/SettingsPage').then((module) => ({ default: module.SettingsPage })))
+const AboutPage = lazy(() => import('@/components/pages/AboutPage').then((module) => ({ default: module.AboutPage })))
+const UpdatePage = lazy(() => import('@/components/pages/UpdatePage').then((module) => ({ default: module.UpdatePage })))
+const DebugPage = lazy(() => import('@/components/pages/DebugPage').then((module) => ({ default: module.DebugPage })))
+
+function LazyPage({ children }: { children: ReactNode }) {
+  return <Suspense fallback={null}>{children}</Suspense>
+}
+
 function PageContent({ pageId }: { pageId: string }) {
   switch (pageId) {
     case 'update':
-      return <UpdatePage />
+      return <LazyPage><UpdatePage /></LazyPage>
     case 'home':
       return <HomePage />
     case 'tools':
-      return <ToolsPage />
+      return <LazyPage><ToolsPage /></LazyPage>
     case 'settings':
-      return <SettingsPage />
+      return <LazyPage><SettingsPage /></LazyPage>
     case 'about':
-      return <AboutPage />
+      return <LazyPage><AboutPage /></LazyPage>
     case 'debug':
-      return <DebugPage />
+      return <LazyPage><DebugPage /></LazyPage>
     default:
       return <HomePage />
   }

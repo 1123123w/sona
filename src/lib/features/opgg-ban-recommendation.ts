@@ -1,5 +1,5 @@
 import { logger } from '@/index'
-import { OpggBanRecommendationModal, type BanRecommendationItem, type RankedBanLane } from '@/components/ui/OpggBanRecommendationModal'
+import type { BanRecommendationItem, RankedBanLane } from '@/components/ui/OpggBanRecommendationModal'
 import { injector } from '@/lib/InjectorManager'
 import {
   OPGG_CACHE_CLEARED_EVENT,
@@ -71,6 +71,8 @@ let banMessage = ''
 let banRecommendations = createEmptyRecommendations()
 let buttonEl: HTMLButtonElement | null = null
 let buttonHandler: EventListener | null = null
+let cacheClearListenerInstalled = false
+let banModalLoadPromise: Promise<typeof import('@/components/ui/OpggBanRecommendationModal')['OpggBanRecommendationModal']> | null = null
 
 function normalizeOpggTier(value: string): OpggTier {
   return SELECTABLE_OPGG_TIERS.includes(value as OpggTier) ? value as OpggTier : DEFAULT_OPGG_TIER
@@ -158,10 +160,16 @@ function toRate(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0
 }
 
+function loadOpggBanRecommendationModal() {
+  banModalLoadPromise ??= import('@/components/ui/OpggBanRecommendationModal')
+    .then((module) => module.OpggBanRecommendationModal)
+  return banModalLoadPromise
+}
+
 async function loadBanRecommendations(tier = normalizeOpggTier(store.get(SETTING_KEYS.opggBuildRecommendationTier))) {
   banState = 'loading'
   banMessage = ''
-  renderBanModal(true)
+  void renderBanModal(true)
 
   try {
     const summary = await ensureRankedSummary(tier)
@@ -175,10 +183,12 @@ async function loadBanRecommendations(tier = normalizeOpggTier(store.get(SETTING
     logger.warn('[OPGG Ban] Ban 推荐数据加载失败:', err)
   }
 
-  renderBanModal(true)
+  void renderBanModal(true)
 }
 
-function renderBanModal(open: boolean) {
+async function renderBanModal(open: boolean) {
+  const OpggBanRecommendationModal = await loadOpggBanRecommendationModal()
+
   if (!modalContainer) {
     modalContainer = document.createElement('div')
     modalContainer.id = BAN_MODAL_ROOT_ID
@@ -187,7 +197,7 @@ function renderBanModal(open: boolean) {
   }
 
   const selectedTier = normalizeOpggTier(store.get(SETTING_KEYS.opggBuildRecommendationTier))
-  const close = () => renderBanModal(false)
+  const close = () => { void renderBanModal(false) }
 
   modalRoot?.render(
     createElement(OpggBanRecommendationModal, {
@@ -265,7 +275,7 @@ function tryInjectBanButton(): boolean {
   const handler = (event: Event) => {
     event.stopPropagation()
     event.preventDefault()
-    renderBanModal(true)
+    void renderBanModal(true)
     void loadBanRecommendations()
   }
 
@@ -298,11 +308,17 @@ export function updateOpggBanRecommendation(enabled: boolean) {
   }
 }
 
-window.addEventListener(OPGG_CACHE_CLEARED_EVENT, () => {
+function handleOpggCacheCleared() {
   rankedSummaryCache = null
   rankedSummaryCacheTier = null
   rankedSummaryPromise = null
   banRecommendations = createEmptyRecommendations()
   banState = 'loading'
   banMessage = ''
-})
+}
+
+export function installOpggBanCacheClearHandler() {
+  if (cacheClearListenerInstalled) return
+  cacheClearListenerInstalled = true
+  window.addEventListener(OPGG_CACHE_CLEARED_EVENT, handleOpggCacheCleared)
+}

@@ -26,11 +26,19 @@ import { updateAutoLockChampion } from '@/lib/features/auto-lock-champion'
 import { updateAutoBanChampion } from '@/lib/features/auto-ban-champion'
 import { updateGameAnalysisPopup } from '@/lib/features/game-analysis-popup'
 import { updateAutoReturnToLobby } from '@/lib/features/auto-return-to-lobby'
-import { updateOpggBuildRecommendation } from '@/lib/features/opgg-build-recommendation'
-import { updateOpggBanRecommendation } from '@/lib/features/opgg-ban-recommendation'
-import { updateChampSelectCounterRecommendation } from '@/lib/features/champselect-counter-recommendation'
-import { preloadChampSelectTierBadgeData, updateChampSelectTierBadge } from '@/lib/features/champselect-tier-badge'
-import { setAvailabilityHijackEnabled, setHideTFTEnabled, setHideRightNavTextEnabled } from '@/lib/injections'
+import { installOpggBuildCacheClearHandler, updateOpggBuildRecommendation } from '@/lib/features/opgg-build-recommendation'
+import { installOpggBanCacheClearHandler, updateOpggBanRecommendation } from '@/lib/features/opgg-ban-recommendation'
+import { installOpggCounterCacheClearHandler, updateChampSelectCounterRecommendation } from '@/lib/features/champselect-counter-recommendation'
+import { installOpggTierCacheClearHandler, preloadChampSelectTierBadgeData, updateChampSelectTierBadge } from '@/lib/features/champselect-tier-badge'
+import {
+  setAvailabilityHijackEnabled,
+  setHideAramModeEnabled,
+  setHideArenaModeEnabled,
+  setHideCustomGameSectionEnabled,
+  setHideRightNavTextEnabled,
+  setHideSummonerRiftModesEnabled,
+  setHideTFTEnabled,
+} from '@/lib/injections'
 import { calculateSonaPlayerStrengthScore, type SonaPlayerStrengthScore } from '@/lib/player-strength-score'
 import { initRuntimeState } from '@/lib/runtime-state'
 
@@ -733,7 +741,23 @@ function updateSideIndicator(enabled: boolean) {
  * 初始化所有功能
  * 根据 store 当前值启用功能，并监听后续变化
  */
+let featuresInitialized = false
+
+function installOpggCacheClearHandlers() {
+  installOpggBuildCacheClearHandler()
+  installOpggCounterCacheClearHandler()
+  installOpggTierCacheClearHandler()
+  installOpggBanCacheClearHandler()
+}
+
 export function initFeatures() {
+  if (featuresInitialized) {
+    logger.debug('initFeatures() skipped because features are already initialized')
+    return
+  }
+  featuresInitialized = true
+
+  installOpggCacheClearHandlers()
   preloadChampSelectTierBadgeData()
 
   updateAutoAccept(store.get(SETTING_KEYS.autoAcceptMatch))
@@ -824,6 +848,18 @@ export function initFeatures() {
   // 隐藏云顶之弈入口
   setHideTFTEnabled(store.get('hideTFT'))
   store.onChange('hideTFT', setHideTFTEnabled)
+
+  setHideSummonerRiftModesEnabled(store.get('hideSummonerRiftModes'))
+  store.onChange('hideSummonerRiftModes', setHideSummonerRiftModesEnabled)
+
+  setHideAramModeEnabled(store.get('hideAramMode'))
+  store.onChange('hideAramMode', setHideAramModeEnabled)
+
+  setHideArenaModeEnabled(store.get('hideArenaMode'))
+  store.onChange('hideArenaMode', setHideArenaModeEnabled)
+
+  setHideCustomGameSectionEnabled(store.get('hideCustomGameSection'))
+  store.onChange('hideCustomGameSection', setHideCustomGameSectionEnabled)
 
   // 隐藏主页右侧导航栏文字
   setHideRightNavTextEnabled(store.get('hideRightNavText'))

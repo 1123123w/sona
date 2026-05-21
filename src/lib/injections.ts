@@ -23,6 +23,25 @@ import { getUpdateState, onUpdateStateChange } from '@/lib/update-checker'
 /** 通用标记：标识已被 Sona 接管的 DOM 元素，防止重复绑定 */
 const HIJACKED_ATTR = 'data-sonaenhance-hijacked'
 
+function hideOfficialEntries(selectors: string[], attr: string): boolean {
+  let matched = false
+  selectors.forEach((selector) => {
+    document.querySelectorAll(`${selector}:not([${attr}])`).forEach((el) => {
+      matched = true
+      el.setAttribute(attr, 'true')
+      ;(el as HTMLElement).style.display = 'none'
+    })
+  })
+  return matched
+}
+
+function restoreOfficialEntries(attr: string) {
+  document.querySelectorAll(`[${attr}]`).forEach((el) => {
+    (el as HTMLElement).style.display = ''
+    el.removeAttribute(attr)
+  })
+}
+
 // ==================== Sona 入口按钮 ====================
 
 const BUTTON_ID = 'sonaenhance-entry-btn'
@@ -459,14 +478,15 @@ export function setHideTFTEnabled(enabled: boolean) {
   } else {
     injector.unregister(tryRemoveTFT)
     // 恢复被隐藏的元素：移除 data-sonaenhance-hidden 标记，让元素重新显示
-    document.querySelectorAll(`[${HIJACKED_ATTR}-tft]`).forEach((el) => {
-      (el as HTMLElement).style.display = ''
-      el.removeAttribute(`${HIJACKED_ATTR}-tft`)
-    })
+    restoreOfficialEntries(TFT_HIDDEN_ATTR)
   }
 }
 
 const TFT_HIDDEN_ATTR = `${HIJACKED_ATTR}-tft`
+const TFT_SELECTORS = [
+  '.menu_item_navbar_tft',
+  'div[data-game-mode="TFT"]',
+]
 
 /**
  * 注入任务：隐藏云顶之弈入口
@@ -474,21 +494,97 @@ const TFT_HIDDEN_ATTR = `${HIJACKED_ATTR}-tft`
  */
 function tryRemoveTFT(): boolean {
   if (!hideTFTEnabled) return true
+  hideOfficialEntries(TFT_SELECTORS, TFT_HIDDEN_ATTR)
 
-  // 顶部导航栏 TFT 菜单项
-  const navItem = document.querySelector(`.menu_item_navbar_tft:not([${TFT_HIDDEN_ATTR}])`)
-  if (navItem) {
-    navItem.setAttribute(TFT_HIDDEN_ATTR, 'true')
-    ;(navItem as HTMLElement).style.display = 'none'
+  return true
+}
+
+// ==================== Hide original client game mode entries ====================
+
+let hideSummonerRiftModesEnabled = false
+let hideAramModeEnabled = false
+let hideArenaModeEnabled = false
+let hideCustomGameSectionEnabled = false
+
+const SUMMONER_RIFT_HIDDEN_ATTR = `${HIJACKED_ATTR}-summoner-rift`
+const ARAM_HIDDEN_ATTR = `${HIJACKED_ATTR}-aram`
+const ARENA_HIDDEN_ATTR = `${HIJACKED_ATTR}-arena`
+const CUSTOM_GAME_HIDDEN_ATTR = `${HIJACKED_ATTR}-custom-game`
+
+const SUMMONER_RIFT_SELECTORS = [
+  'div[data-game-mode="CLASSIC"]',
+  'div[data-game-mode="SWIFTPLAY"]',
+  'lol-uikit-navigation-item[data-category="kVersusAI"]',
+  'lol-uikit-navigation-item[data-category="kTraining"]',
+]
+const ARAM_SELECTORS = ['div[data-game-mode="ARAM"]']
+const ARENA_SELECTORS = ['div[data-game-mode="CHERRY"]']
+const CUSTOM_GAME_SELECTORS = [
+  'lol-uikit-navigation-item[data-category="CreateCustom"]',
+  'lol-uikit-navigation-item[data-category="JoinCustom"]',
+]
+
+export function setHideSummonerRiftModesEnabled(enabled: boolean) {
+  hideSummonerRiftModesEnabled = enabled
+  if (enabled) {
+    injector.register(tryHideSummonerRiftModes)
+  } else {
+    injector.unregister(tryHideSummonerRiftModes)
+    restoreOfficialEntries(SUMMONER_RIFT_HIDDEN_ATTR)
   }
+}
 
-  // 主界面 TFT 游戏模式卡片
-  // const gameCard = document.querySelector(`[data-game-mode="TFT"].game-type-card:not([${TFT_HIDDEN_ATTR}])`)
-  // if (gameCard) {
-  //   gameCard.setAttribute(TFT_HIDDEN_ATTR, 'true')
-  //   ;(gameCard as HTMLElement).style.display = 'none'
-  // }
+export function setHideAramModeEnabled(enabled: boolean) {
+  hideAramModeEnabled = enabled
+  if (enabled) {
+    injector.register(tryHideAramMode)
+  } else {
+    injector.unregister(tryHideAramMode)
+    restoreOfficialEntries(ARAM_HIDDEN_ATTR)
+  }
+}
 
+export function setHideArenaModeEnabled(enabled: boolean) {
+  hideArenaModeEnabled = enabled
+  if (enabled) {
+    injector.register(tryHideArenaMode)
+  } else {
+    injector.unregister(tryHideArenaMode)
+    restoreOfficialEntries(ARENA_HIDDEN_ATTR)
+  }
+}
+
+export function setHideCustomGameSectionEnabled(enabled: boolean) {
+  hideCustomGameSectionEnabled = enabled
+  if (enabled) {
+    injector.register(tryHideCustomGameSection)
+  } else {
+    injector.unregister(tryHideCustomGameSection)
+    restoreOfficialEntries(CUSTOM_GAME_HIDDEN_ATTR)
+  }
+}
+
+function tryHideSummonerRiftModes(): boolean {
+  if (!hideSummonerRiftModesEnabled) return true
+  hideOfficialEntries(SUMMONER_RIFT_SELECTORS, SUMMONER_RIFT_HIDDEN_ATTR)
+  return true
+}
+
+function tryHideAramMode(): boolean {
+  if (!hideAramModeEnabled) return true
+  hideOfficialEntries(ARAM_SELECTORS, ARAM_HIDDEN_ATTR)
+  return true
+}
+
+function tryHideArenaMode(): boolean {
+  if (!hideArenaModeEnabled) return true
+  hideOfficialEntries(ARENA_SELECTORS, ARENA_HIDDEN_ATTR)
+  return true
+}
+
+function tryHideCustomGameSection(): boolean {
+  if (!hideCustomGameSectionEnabled) return true
+  hideOfficialEntries(CUSTOM_GAME_SELECTORS, CUSTOM_GAME_HIDDEN_ATTR)
   return true
 }
 

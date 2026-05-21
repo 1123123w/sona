@@ -1,3 +1,5 @@
+import { createLogger } from '@/lib/logger'
+
 export interface AramggRequestOptions {
   signal?: AbortSignal
   timeoutMs?: number
@@ -5,6 +7,8 @@ export interface AramggRequestOptions {
 
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue }
 type JsonObject = { [key: string]: JsonValue }
+
+const logger = createLogger({ name: 'Sona-E ARAMGG', version: '' })
 
 export interface AramggMayhemAugment {
   description: string
@@ -525,21 +529,13 @@ export class AramggDataApi {
     const text = await this.requestText(`/zh-CN/champion-stats/${championId}`, options)
     const parsed = parseAramggChampionRecommendation(text, championId)
 
-    console.groupCollapsed(`[ARAMGG] champion ${championId} parsed recommendation`)
-    console.log('raw text length:', text.length)
-    console.log('raw text preview:', text.slice(0, 500))
-    console.log('summary:', {
+    logger.debug('[ARAMGG] champion %d parsed recommendation summary: %o', championId, {
+      rawTextLength: text.length,
       hasChampionStats: parsed.championStats != null,
       augmentCount: Object.keys(parsed.augments).length,
       coreItemBuildCount: parsed.coreItemBuilds.length,
       itemCount: Object.keys(parsed.items).length,
     })
-    console.log('championStats:', parsed.championStats)
-    console.log('coreItemBuilds:', parsed.coreItemBuilds)
-    console.log('augments:', parsed.augments)
-    console.log('items:', parsed.items)
-    console.log('full parsed recommendation:', parsed)
-    console.groupEnd()
 
     return parsed
   }

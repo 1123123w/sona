@@ -102,6 +102,10 @@ export function SettingsPage() {
   const [hotkey, setHotkey] = useState(store.get('hotkey'))
   const [globalParticle, setGlobalParticle] = useState(store.get('globalParticle'))
   const [hideTFT, setHideTFT] = useState(store.get('hideTFT'))
+  const [hideSummonerRiftModes, setHideSummonerRiftModes] = useState(store.get('hideSummonerRiftModes'))
+  const [hideAramMode, setHideAramMode] = useState(store.get('hideAramMode'))
+  const [hideArenaMode, setHideArenaMode] = useState(store.get('hideArenaMode'))
+  const [hideCustomGameSection, setHideCustomGameSection] = useState(store.get('hideCustomGameSection'))
   const [hideRightNavText, setHideRightNavText] = useState(store.get('hideRightNavText'))
   const [windowEffect, setWindowEffect] = useState(store.get('windowEffect'))
   const [opggCacheStatus, setOpggCacheStatus] = useState('')
@@ -119,6 +123,10 @@ export function SettingsPage() {
       store.onChange('hotkey', setHotkey),
       store.onChange('globalParticle', setGlobalParticle),
       store.onChange('hideTFT', setHideTFT),
+      store.onChange('hideSummonerRiftModes', setHideSummonerRiftModes),
+      store.onChange('hideAramMode', setHideAramMode),
+      store.onChange('hideArenaMode', setHideArenaMode),
+      store.onChange('hideCustomGameSection', setHideCustomGameSection),
       store.onChange('hideRightNavText', setHideRightNavText),
       store.onChange('windowEffect', setWindowEffect),
     ]
@@ -181,6 +189,42 @@ export function SettingsPage() {
           <SonaSwitch
             checked={hideTFT}
             onChange={(v) => { setHideTFT(v); store.set('hideTFT', v) }}
+          />
+        </SettingCard>
+        <SettingCard
+          title={t('settings.hideSummonerRiftModes.title')}
+          description={t('settings.hideSummonerRiftModes.desc')}
+        >
+          <SonaSwitch
+            checked={hideSummonerRiftModes}
+            onChange={(v) => { setHideSummonerRiftModes(v); store.set('hideSummonerRiftModes', v) }}
+          />
+        </SettingCard>
+        <SettingCard
+          title={t('settings.hideAramMode.title')}
+          description={t('settings.hideAramMode.desc')}
+        >
+          <SonaSwitch
+            checked={hideAramMode}
+            onChange={(v) => { setHideAramMode(v); store.set('hideAramMode', v) }}
+          />
+        </SettingCard>
+        <SettingCard
+          title={t('settings.hideArenaMode.title')}
+          description={t('settings.hideArenaMode.desc')}
+        >
+          <SonaSwitch
+            checked={hideArenaMode}
+            onChange={(v) => { setHideArenaMode(v); store.set('hideArenaMode', v) }}
+          />
+        </SettingCard>
+        <SettingCard
+          title={t('settings.hideCustomGameSection.title')}
+          description={t('settings.hideCustomGameSection.desc')}
+        >
+          <SonaSwitch
+            checked={hideCustomGameSection}
+            onChange={(v) => { setHideCustomGameSection(v); store.set('hideCustomGameSection', v) }}
           />
         </SettingCard>
         <SettingCard

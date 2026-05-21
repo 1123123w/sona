@@ -107,6 +107,10 @@ export interface SonaConfig {
   ignoreProfilePrivacy: boolean
   /** 隐藏客户端云顶之弈入口 */
   hideTFT: boolean
+  hideSummonerRiftModes: boolean
+  hideAramMode: boolean
+  hideArenaMode: boolean
+  hideCustomGameSection: boolean
   /** 隐藏主页右侧导航栏文字（仅保留图标） */
   hideRightNavText: boolean
   /** 对局结束自动点赞 */
@@ -228,6 +232,10 @@ const DEFAULT_CONFIG: SonaConfig = {
   lobbyEnhancement: false,
   lobbyEnhancementFetchCount: 50,
   hideTFT: false,
+  hideSummonerRiftModes: false,
+  hideAramMode: false,
+  hideArenaMode: false,
+  hideCustomGameSection: false,
   hideRightNavText: false,
   ignoreProfilePrivacy: true,
   autoHonor: false,

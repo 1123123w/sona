@@ -71,6 +71,7 @@ let counterDataMessage = ''
 let counterModalRoot: Root | null = null
 let counterModalContainer: HTMLDivElement | null = null
 let rearmTimer: number | null = null
+let cacheClearListenerInstalled = false
 const boundEnemyIcons: Array<{ el: HTMLElement; handler: EventListener }> = []
 
 function getElementRect(el: Element) {
@@ -589,7 +590,7 @@ export function updateChampSelectCounterRecommendation(enabled: boolean) {
   }
 }
 
-window.addEventListener(OPGG_CACHE_CLEARED_EVENT, () => {
+function handleOpggCacheCleared() {
   rankedSummaryPromise = null
   rankedSummaryCache = null
   rankedSummaryCacheTier = null
@@ -598,6 +599,12 @@ window.addEventListener(OPGG_CACHE_CLEARED_EVENT, () => {
   counterDataState = 'loading'
   counterDataMessage = ''
   if (currentSession) void refreshCounterRecommendations(currentSession)
-})
+}
+
+export function installOpggCounterCacheClearHandler() {
+  if (cacheClearListenerInstalled) return
+  cacheClearListenerInstalled = true
+  window.addEventListener(OPGG_CACHE_CLEARED_EVENT, handleOpggCacheCleared)
+}
 
 installCounterDebugHandle()

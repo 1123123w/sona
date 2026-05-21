@@ -14,7 +14,7 @@ import { createElement } from 'react'
 import { flushSync } from 'react-dom'
 import { createRoot, type Root } from 'react-dom/client'
 import { getAllChampions, getAugmentInfo, getChampionById, getQueue, getQueueName } from '@/lib/assets'
-import { OpggBuildRecommendationPanel, type BuildRecommendation, type RecommendationContext } from '@/components/ui/OpggBuildRecommendationPanel'
+import type { BuildRecommendation, RecommendationContext } from '@/components/ui/OpggBuildRecommendationPanel'
 import { applyOpggRunePage } from '@/lib/opgg-runes'
 import { lcu, LcuEventUri, type ChampSelectSession, type ItemSet, type ItemSetBlock, type LCUEventMessage, type RunePage, type RunePagePayload } from '@/lib/lcu'
 import { SETTING_KEYS, store } from '@/lib/store'
@@ -102,6 +102,8 @@ let lastAppliedSpellKey = ''
 let suppressRuneSaveUntil = 0
 let suppressSpellSaveUntil = 0
 let smartLoadoutRestoreTimer: number | null = null
+let cacheClearListenerInstalled = false
+let opggPanelLoadPromise: Promise<typeof import('@/components/ui/OpggBuildRecommendationPanel')['OpggBuildRecommendationPanel']> | null = null
 let pendingSmartLoadoutContext: RecommendationContext | null = null
 let lastObservedSpellKey = ''
 let lastObservedSpellSignature = ''
@@ -1165,6 +1167,12 @@ function closePanel() {
   }
 }
 
+function loadOpggBuildRecommendationPanel() {
+  opggPanelLoadPromise ??= import('@/components/ui/OpggBuildRecommendationPanel')
+    .then((module) => module.OpggBuildRecommendationPanel)
+  return opggPanelLoadPromise
+}
+
 async function openRecommendationPanel(anchor: HTMLElement, contextOverride?: RecommendationContext) {
   if (contextOverride) {
     currentContext = { ...contextOverride }
@@ -1240,7 +1248,7 @@ async function openRecommendationPanel(anchor: HTMLElement, contextOverride?: Re
     void openRecommendationPanel(anchor, context)
   }
 
-  renderRecommendationPanel(reactRoot, context, recommendation, loadError, isLoading, getSelectedOpggTier(), handleTierChange)
+  await renderRecommendationPanel(reactRoot, context, recommendation, loadError, isLoading, getSelectedOpggTier(), handleTierChange)
   manager.appendChild(root)
 
   const rect = anchor.getBoundingClientRect()
@@ -1267,10 +1275,10 @@ async function openRecommendationPanel(anchor: HTMLElement, contextOverride?: Re
   })
 
   if (cacheEntry && isLoading) {
-    cacheEntry.promise.then(() => {
+    cacheEntry.promise.then(async () => {
       if (document.getElementById(PANEL_ID) !== root || activePanelKey !== cacheEntry.key || panelReactRoot !== reactRoot) return
 
-      renderRecommendationPanel(
+      await renderRecommendationPanel(
         reactRoot,
         cacheEntry.context,
         cacheEntry.data ?? null,
@@ -1306,7 +1314,7 @@ export async function openOpggBuildRecommendationDebugPanel(
   })
 }
 
-function renderRecommendationPanel(
+async function renderRecommendationPanel(
   root: Root,
   context: RecommendationContext,
   recommendation: BuildRecommendation | null,
@@ -1314,7 +1322,8 @@ function renderRecommendationPanel(
   isLoading: boolean,
   selectedTier: OpggTier,
   onTierChange: (tier: OpggTier) => void,
-): void {
+): Promise<void> {
+  const OpggBuildRecommendationPanel = await loadOpggBuildRecommendationPanel()
   flushSync(() => {
     root.render(createElement(OpggBuildRecommendationPanel, {
       context,
@@ -1490,7 +1499,7 @@ export function updateOpggBuildRecommendation(enabled: boolean) {
   }
 }
 
-window.addEventListener(OPGG_CACHE_CLEARED_EVENT, () => {
+function handleOpggCacheCleared() {
   recommendationCache.clear()
   itemSetSyncInFlightKeys.clear()
   opggRuneSyncInFlightKeys.clear()
@@ -1500,6 +1509,12 @@ window.addEventListener(OPGG_CACHE_CLEARED_EVENT, () => {
   lastAppliedItemSetKey = ''
   lastAppliedRuneKey = ''
   lastAppliedSpellKey = ''
-})
+}
+
+export function installOpggBuildCacheClearHandler() {
+  if (cacheClearListenerInstalled) return
+  cacheClearListenerInstalled = true
+  window.addEventListener(OPGG_CACHE_CLEARED_EVENT, handleOpggCacheCleared)
+}
 
 installOpggDebugHandle()

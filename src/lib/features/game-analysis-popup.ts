@@ -4,15 +4,23 @@ import { logger } from '@/index'
 import { lcu, LcuEventUri } from '@/lib/lcu'
 import type { LCUEventMessage, GameflowPhase } from '@/lib/lcu'
 import { injector } from '@/lib/InjectorManager'
-import { GameAnalysisModal } from '@/components/ui/GameAnalysisModal'
 
 // ==================== 进入游戏自动弹窗战力分析 ====================
 
 /** GameAnalysisModal 的独立 React root */
 let gameAnalysisRoot: Root | null = null
 let gameAnalysisContainer: HTMLDivElement | null = null
+let gameAnalysisModalLoadPromise: Promise<typeof import('@/components/ui/GameAnalysisModal')['GameAnalysisModal']> | null = null
 
-function showGameAnalysisModal() {
+function loadGameAnalysisModal() {
+  gameAnalysisModalLoadPromise ??= import('@/components/ui/GameAnalysisModal')
+    .then((module) => module.GameAnalysisModal)
+  return gameAnalysisModalLoadPromise
+}
+
+async function showGameAnalysisModal() {
+  const GameAnalysisModal = await loadGameAnalysisModal()
+
   if (!gameAnalysisContainer) {
     gameAnalysisContainer = document.createElement('div')
     gameAnalysisContainer.id = 'sonaenhance-game-analysis-root'
@@ -66,7 +74,7 @@ function tryInjectGameAnalysisButton(): boolean {
   btn.addEventListener('click', (e) => {
     e.stopPropagation()
     e.preventDefault()
-    showGameAnalysisModal()
+    void showGameAnalysisModal()
     logger.info('[GameAnalysis] 打开分析弹窗')
   })
 
@@ -103,12 +111,12 @@ export function updateGameAnalysisPopup(enabled: boolean) {
             const gid = session.gameData?.gameId ?? 0
             if (gid > 0 && gid !== lastPopupGameId) {
               lastPopupGameId = gid
-              showGameAnalysisModal()
+              void showGameAnalysisModal()
             }
           })
           .catch(() => {
             // session 查询失败也尝试弹窗（可能是自定义等特殊情况）
-            showGameAnalysisModal()
+            void showGameAnalysisModal()
           })
       } else if (phase === 'WaitingForStats' || phase === 'PreEndOfGame' || phase === 'EndOfGame') {
         // 游戏已结束（WaitingForStats / PreEndOfGame / EndOfGame / None / Lobby 等）
