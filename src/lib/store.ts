@@ -48,7 +48,6 @@ export interface SonaConfig {
   /** 界面语言 */
   language: 'zh-CN' | 'zh-TW' | 'en-US'
   /** 窗口视觉特效 */
-  windowEffect: string
   /** 英雄选择玩家头像交互（点击队友头像展示历史数据） */
   champSelectAssist: boolean
   /** OP.GG 配装推荐（接管选好英雄后的技能预览面板点击） */
@@ -93,8 +92,6 @@ export interface SonaConfig {
   sideIndicator: boolean
   /** 红蓝方提示消息类型: chat=队友可见, celebration=仅自己可见 */
   sideIndicatorMsgType: string
-  /** 全局粒子美化效果 */
-  globalParticle: boolean
   /** 好友智能分组（开黑好友用同样颜色的border-right展示） */
   friendSmartGroup: boolean
   /** 增强游戏中好友状态（显示模式、英雄和实时对局时长） */
@@ -214,7 +211,6 @@ const DEFAULT_CONFIG: SonaConfig = {
   statusMessage: {},
   hotkey: 'F1',
   language: 'zh-CN',
-  windowEffect: 'none',
   champSelectAssist: false,
   smartRunePages: {},
   smartSummonerSpells: {},
@@ -226,7 +222,6 @@ const DEFAULT_CONFIG: SonaConfig = {
   gameAnalysisFetchCount: 50,
   sideIndicator: false,
   sideIndicatorMsgType: 'celebration',
-  globalParticle: false,
   friendSmartGroup: false,
   enhancedFriendGameStatus: true,
   lobbyEnhancement: false,

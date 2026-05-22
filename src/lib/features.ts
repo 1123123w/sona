@@ -17,7 +17,6 @@ import { updateAutoAccept } from '@/lib/features/auto-accept'
 import { updateDebugGameflow } from '@/lib/features/debug-gameflow'
 import { updateUnlockStatus } from '@/lib/features/unlock-status'
 import { updateBenchNoCooldown } from '@/lib/features/bench-no-cooldown'
-import { updateGlobalParticle } from '@/lib/features/global-particle'
 import { updateFriendSmartGroup } from '@/lib/features/friend-smart-group'
 import { updateEnhancedFriendGameStatus } from '@/lib/features/enhanced-friend-game-status'
 import { updateLobbyMemberMatchHistory } from '@/lib/features/lobby-member-match-history'
@@ -214,10 +213,8 @@ async function _doFetchTeamStats(): Promise<TeamStatsResult> {
 
 import { createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { ChampSelectIconEffect, getTierConfig } from '@/components/ui/ChampSelectIconEffect'
 import { MatchHistoryModal } from '@/components/ui/MatchHistoryModal'
 
-const SONA_TIER_ATTR = 'data-sonaenhance-tier'
 const SONA_STATS_ATTR = 'data-sonaenhance-stats'
 const SONA_CLICK_ATTR = 'data-sonaenhance-click'
 const SONA_PLAYER_KEY_ATTR = 'data-sonaenhance-player-key'
@@ -326,9 +323,7 @@ function buildFloorStatsFromSession(session: ChampSelectSession): TeammateStats[
 }
 
 /** 已挂载的 React root */
-const mountedRoots: { root: Root; container: HTMLDivElement }[] = []
-
-/** 注入任务：给选人头像附加粒子特效 + 右侧战绩信息 */
+/** 注入任务：给选人阶段补充右侧战绩信息 */
 function tryInjectChampSelectTier(): boolean {
   //  这里选择wrapper要额外加一个left，因为对方玩家的信息是看不到的，处理不了
   const wrappers = document.querySelectorAll('.party.visible .summoner-wrapper.visible.left')
@@ -357,30 +352,6 @@ function tryInjectChampSelectTier(): boolean {
     const winRate = stat.winRate
     const playerKey = getTeammateStatsKey(stat)
     iconContainer.setAttribute(SONA_PLAYER_KEY_ATTR, playerKey)
-
-    // ---- 粒子特效 ----
-    if (!iconContainer.querySelector('[data-sonaenhance-particle]')) {
-      iconContainer.setAttribute(SONA_TIER_ATTR, 'true')
-      iconContainer.style.position = 'relative'
-      iconContainer.style.overflow = 'visible'
-      iconContainer.style.borderRadius = '50%'
-
-      const config = getTierConfig(winRate)
-      if (config.boxShadow) iconContainer.style.boxShadow = config.boxShadow
-
-      const mountDiv = document.createElement('div')
-      mountDiv.setAttribute('data-sonaenhance-particle', 'true')
-      iconContainer.prepend(mountDiv)
-
-      const rect = iconContainer.getBoundingClientRect()
-      const size = Math.max(rect.width, rect.height) + 40
-
-      const root = createRoot(mountDiv)
-      root.render(createElement(ChampSelectIconEffect, { winRate, width: size, height: size }))
-      mountedRoots.push({ root, container: mountDiv })
-
-      logger.info('头像粒子特效 → %d楼 胜率%s%% → %s', i + 1, winRate.toFixed(1), config.id)
-    }
 
     // ---- 头像点击 → 弹出战绩弹窗 ----
     let clickHandler: ((e: Event) => void) | null = null
@@ -467,7 +438,7 @@ function unregisterTierInjection() {
 
 
 /** 查询胜率并启动头像特效注入 */
-async function applyChampSelectIconEffects() {
+async function applyChampSelectAssistStats() {
   try {
     // 先清理上一局的残留
     unregisterTierInjection()
@@ -522,12 +493,6 @@ function onChampSelectUpdate(event: LCUEventMessage) {
 
 /** 清理已注入的 DOM（但不重置 floorStats / statsByPuuid / 注入注册状态） */
 function cleanupInjectedDOM() {
-  mountedRoots.forEach(({ root, container }) => {
-    root.unmount()
-    container.remove()
-  })
-  mountedRoots.length = 0
-
   for (const ref of champSelectInjectedRefs) {
     ref.statsDiv.remove()
     // 移除 click handler
@@ -536,7 +501,6 @@ function cleanupInjectedDOM() {
     }
     ref.iconContainer.style.filter = ''
     ref.iconContainer.style.boxShadow = ''
-    ref.iconContainer.removeAttribute(SONA_TIER_ATTR)
     ref.iconContainer.removeAttribute(SONA_CLICK_ATTR)
     ref.iconContainer.removeAttribute(SONA_PLAYER_KEY_ATTR)
     ref.iconContainer.style.cursor = ''
@@ -554,7 +518,7 @@ function updateChampSelectAssist(enabled: boolean) {
       if (phase === 'ChampSelect') {
         // 立即清理上一局残留，确保新局开始时是干净的
         unregisterTierInjection()
-        applyChampSelectIconEffects()
+        applyChampSelectAssistStats()
       } else {
         unregisterTierInjection()
       }
@@ -801,9 +765,6 @@ export function initFeatures() {
   updateChampSelectCounterRecommendation(store.get(SETTING_KEYS.champSelectCounterRecommendation))
   store.onChange(SETTING_KEYS.champSelectCounterRecommendation, updateChampSelectCounterRecommendation)
 
-  updateGlobalParticle(store.get('globalParticle'))
-  store.onChange('globalParticle', updateGlobalParticle)
-
   updateFriendSmartGroup(store.get('friendSmartGroup'))
   store.onChange('friendSmartGroup', updateFriendSmartGroup)
 
@@ -866,13 +827,6 @@ export function initFeatures() {
   store.onChange('hideRightNavText', setHideRightNavTextEnabled)
 
   initRuntimeState()
-
-  // 恢复窗口特效
-  const savedEffect = store.get('windowEffect')
-  if (savedEffect && savedEffect !== 'none') {
-    Effect.apply(savedEffect as 'acrylic', { color: '#0006' })
-    logger.info('Restored window effect: %s', savedEffect)
-  }
 
   logger.info('Features initialized ✓')
 }

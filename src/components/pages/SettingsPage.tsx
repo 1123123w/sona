@@ -6,7 +6,6 @@ import { SonaButton } from '@/components/ui/SonaButton'
 import { SonaInput } from '@/components/ui/SonaInput'
 import { clearOpggCache } from '@/lib/opgg-api'
 import { lcu } from '@/lib/lcu'
-import { logger } from '@/index'
 import { store } from '@/lib/store'
 import { type AppLanguage, languageOptions, useI18n } from '@/lib/i18n'
 import '@/styles/SettingsPage.css'
@@ -100,50 +99,26 @@ function BackupManager() {
 export function SettingsPage() {
   const { language, setLanguage, t } = useI18n()
   const [hotkey, setHotkey] = useState(store.get('hotkey'))
-  const [globalParticle, setGlobalParticle] = useState(store.get('globalParticle'))
   const [hideTFT, setHideTFT] = useState(store.get('hideTFT'))
   const [hideSummonerRiftModes, setHideSummonerRiftModes] = useState(store.get('hideSummonerRiftModes'))
   const [hideAramMode, setHideAramMode] = useState(store.get('hideAramMode'))
   const [hideArenaMode, setHideArenaMode] = useState(store.get('hideArenaMode'))
   const [hideCustomGameSection, setHideCustomGameSection] = useState(store.get('hideCustomGameSection'))
   const [hideRightNavText, setHideRightNavText] = useState(store.get('hideRightNavText'))
-  const [windowEffect, setWindowEffect] = useState(store.get('windowEffect'))
   const [opggCacheStatus, setOpggCacheStatus] = useState('')
-  const effectOptions = [
-    { value: 'none', label: t('settings.effect.none') },
-    { value: 'blurbehind', label: t('settings.effect.blurbehind') },
-    { value: 'acrylic', label: t('settings.effect.acrylic') },
-    { value: 'unified', label: t('settings.effect.unified') },
-    { value: 'mica', label: t('settings.effect.mica') },
-    { value: 'transparent', label: t('settings.effect.transparent') },
-  ]
 
   useEffect(() => {
     const unsubs = [
       store.onChange('hotkey', setHotkey),
-      store.onChange('globalParticle', setGlobalParticle),
       store.onChange('hideTFT', setHideTFT),
       store.onChange('hideSummonerRiftModes', setHideSummonerRiftModes),
       store.onChange('hideAramMode', setHideAramMode),
       store.onChange('hideArenaMode', setHideArenaMode),
       store.onChange('hideCustomGameSection', setHideCustomGameSection),
       store.onChange('hideRightNavText', setHideRightNavText),
-      store.onChange('windowEffect', setWindowEffect),
     ]
     return () => unsubs.forEach((fn) => fn())
   }, [])
-
-  const handleEffectChange = (value: string) => {
-    setWindowEffect(value)
-    store.set('windowEffect', value)
-    if (value === 'none') {
-      Effect.clear()
-      logger.info('Window effect cleared')
-    } else {
-      Effect.apply(value as 'acrylic', { color: '#0006' })
-      logger.info('Window effect applied: %s', value)
-    }
-  }
 
   return (
     <div className="sonaenhance-settings">
@@ -168,15 +143,6 @@ export function SettingsPage() {
             options={hotkeyOptions}
             value={hotkey}
             onChange={(v) => { setHotkey(v); store.set('hotkey', v) }}
-          />
-        </SettingCard>
-        <SettingCard
-          title={t('settings.particle.title')}
-          description={t('settings.particle.desc')}
-        >
-          <SonaSwitch
-            checked={globalParticle}
-            onChange={(v) => { setGlobalParticle(v); store.set('globalParticle', v) }}
           />
         </SettingCard>
       </SettingGroup>
@@ -235,18 +201,6 @@ export function SettingsPage() {
             checked={hideRightNavText}
             onChange={(v) => { setHideRightNavText(v); store.set('hideRightNavText', v) }}
           />
-        </SettingCard>
-        <SettingCard
-          title={t('settings.windowEffect.title')}
-          description={t('settings.windowEffect.desc')}
-        >
-          <div style={{ minWidth: 130 }}>
-            <SonaSelect
-              options={effectOptions}
-              value={windowEffect}
-              onChange={handleEffectChange}
-            />
-          </div>
         </SettingCard>
       </SettingGroup>
 
