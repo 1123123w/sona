@@ -4,7 +4,7 @@ import { SonaButton } from '@/components/ui/SonaButton'
 import { SonaInput } from '@/components/ui/SonaInput'
 import { SonaSwitch } from '@/components/ui/SonaSwitch'
 import { SonaSelect } from '@/components/ui/SonaSelect'
-import { searchChampions, getChampionById, type ChampionInfo } from '@/lib/assets'
+import { searchChampions, getChampionById, getPlayableQueues, type ChampionInfo } from '@/lib/assets'
 import { lcu } from '@/lib/lcu'
 import { logger } from '@/index'
 import { store } from '@/lib/store'
@@ -72,9 +72,12 @@ function ChampionPriorityCards({
 export function ToolsPage() {
   const { t } = useI18n()
   const [autoAccept, setAutoAccept] = useState(store.get('autoAcceptMatch'))
-  // 延迟值在 UI 里用字符串存，避免"删到空 → 变 NaN"、"输到一半"等中间态被推回 store
+  // Keep delay inputs as strings so partial edits are not pushed back to the store.
   const [autoAcceptDelayMin, setAutoAcceptDelayMin] = useState(String(store.get('autoAcceptDelayMin')))
   const [autoAcceptDelayMax, setAutoAcceptDelayMax] = useState(String(store.get('autoAcceptDelayMax')))
+  const [allowDeclineAfterAccept, setAllowDeclineAfterAccept] = useState(store.get('allowDeclineAfterAccept'))
+  const [restReminderEnabled, setRestReminderEnabled] = useState(store.get('restReminderEnabled'))
+  const [restReminderAcceptLimit, setRestReminderAcceptLimit] = useState(String(store.get('restReminderAcceptLimit')))
   const [unlockStatus, setUnlockStatus] = useState(store.get('unlockStatus'))
   const [unlockAvailability, setUnlockAvailability] = useState(store.get('unlockAvailability'))
   const [unlockChromas, setUnlockChromas] = useState(store.get('unlockChromas'))
@@ -100,6 +103,10 @@ export function ToolsPage() {
   const [enhancedFriendGameStatus, setEnhancedFriendGameStatus] = useState(store.get('enhancedFriendGameStatus'))
   const [lobbyEnhancement, setLobbyEnhancement] = useState(store.get('lobbyEnhancement'))
   const [lobbyEnhancementFetchCount, setLobbyEnhancementFetchCount] = useState(store.get('lobbyEnhancementFetchCount'))
+  const [hideEsportsPopup, setHideEsportsPopup] = useState(store.get('hideEsportsPopup'))
+  const [quickLobbyMode, setQuickLobbyMode] = useState(store.get('quickLobbyMode'))
+  const [quickLobbyQueueId, setQuickLobbyQueueId] = useState(store.get('quickLobbyQueueId'))
+  const [quickLobbyQueueOptions, setQuickLobbyQueueOptions] = useState<{ value: string; label: string }[]>([])
   const [autoHonor, setAutoHonor] = useState(store.get('autoHonor'))
   const [autoLockChampion, setAutoLockChampion] = useState(store.get('autoLockChampion'))
   const [autoLockChampionIds, setAutoLockChampionIds] = useState(store.get('autoLockChampionIds'))
@@ -119,6 +126,9 @@ export function ToolsPage() {
       store.onChange('autoAcceptMatch', setAutoAccept),
       store.onChange('autoAcceptDelayMin', (v) => setAutoAcceptDelayMin(String(v))),
       store.onChange('autoAcceptDelayMax', (v) => setAutoAcceptDelayMax(String(v))),
+      store.onChange('allowDeclineAfterAccept', setAllowDeclineAfterAccept),
+      store.onChange('restReminderEnabled', setRestReminderEnabled),
+      store.onChange('restReminderAcceptLimit', (v) => setRestReminderAcceptLimit(String(v))),
       store.onChange('unlockStatus', setUnlockStatus),
       store.onChange('unlockAvailability', setUnlockAvailability),
       store.onChange('unlockChromas', setUnlockChromas),
@@ -142,6 +152,9 @@ export function ToolsPage() {
       store.onChange('enhancedFriendGameStatus', setEnhancedFriendGameStatus),
       store.onChange('lobbyEnhancement', setLobbyEnhancement),
       store.onChange('lobbyEnhancementFetchCount', setLobbyEnhancementFetchCount),
+      store.onChange('hideEsportsPopup', setHideEsportsPopup),
+      store.onChange('quickLobbyMode', setQuickLobbyMode),
+      store.onChange('quickLobbyQueueId', setQuickLobbyQueueId),
       store.onChange('autoHonor', setAutoHonor),
       store.onChange('autoLockChampion', setAutoLockChampion),
       store.onChange('autoLockChampionIds', setAutoLockChampionIds),
@@ -151,7 +164,25 @@ export function ToolsPage() {
     return () => unsubs.forEach((fn) => fn())
   }, [])
 
-  // 点击外部关闭英雄联想下拉
+  useEffect(() => {
+    const loadQueues = () => {
+      const queues = getPlayableQueues()
+      if (queues.length === 0) return false
+      setQuickLobbyQueueOptions(queues.map((queue) => ({
+        value: String(queue.id),
+        label: queue.name,
+      })))
+      return true
+    }
+
+    if (loadQueues()) return
+    const timer = window.setInterval(() => {
+      if (loadQueues()) window.clearInterval(timer)
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  // Close champion suggestions when clicking outside.
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (champSuggestRef.current && !champSuggestRef.current.contains(e.target as Node)) {
@@ -241,7 +272,7 @@ export function ToolsPage() {
                 <SonaInput
                   value={autoAcceptDelayMin}
                   onChange={(v) => {
-                    // 毫秒只收整数
+                    // Accept integer milliseconds only.
                     const cleaned = v.replace(/[^\d]/g, '')
                     setAutoAcceptDelayMin(cleaned)
                     const n = parseInt(cleaned, 10)
@@ -267,6 +298,62 @@ export function ToolsPage() {
             </div>
           </SettingCard>
         )}
+        <SettingCard
+          title={t('tools.allowDeclineAfterAccept.title')}
+          description={t('tools.allowDeclineAfterAccept.desc')}
+        >
+          <SonaSwitch
+            checked={allowDeclineAfterAccept}
+            onChange={(v) => { setAllowDeclineAfterAccept(v); store.set('allowDeclineAfterAccept', v) }}
+          />
+        </SettingCard>
+        <SettingCard
+          title={t('tools.quickLobby.title')}
+          description={t('tools.quickLobby.desc')}
+        >
+          <SonaSelect
+            value={String(quickLobbyQueueId)}
+            onChange={(value) => {
+              const queueId = Number(value)
+              setQuickLobbyQueueId(queueId)
+              store.set('quickLobbyQueueId', queueId)
+            }}
+            options={quickLobbyQueueOptions}
+            placeholder={t('tools.quickLobby.placeholder')}
+          />
+          <SonaSwitch
+            checked={quickLobbyMode}
+            onChange={(v) => { setQuickLobbyMode(v); store.set('quickLobbyMode', v) }}
+          />
+        </SettingCard>
+        <SettingCard
+          title={t('tools.restReminder.title')}
+          description={t('tools.restReminder.desc')}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 80 }}>
+              <SonaInput
+                value={restReminderAcceptLimit}
+                onChange={(v) => {
+                  const cleaned = v.replace(/[^\d]/g, '')
+                  setRestReminderAcceptLimit(cleaned)
+                  const n = parseInt(cleaned, 10)
+                  store.set('restReminderAcceptLimit', Number.isFinite(n) && n > 0 ? n : 1)
+                }}
+                placeholder={t('tools.restReminder.limitPlaceholder')}
+              />
+            </div>
+            <span style={{ color: '#a09b8c', fontSize: 13 }}>{t('tools.restReminder.unit')}</span>
+            <SonaSwitch
+              checked={restReminderEnabled}
+              onChange={(v) => {
+                setRestReminderEnabled(v)
+                store.set('restReminderEnabled', v)
+                store.set('restReminderAcceptCount', 0)
+              }}
+            />
+          </div>
+        </SettingCard>
         <SettingCard
           title={t('tools.benchNoCooldown.title')}
           description={t('tools.benchNoCooldown.desc')}
@@ -392,7 +479,7 @@ export function ToolsPage() {
             onChange={(v) => { setBalanceBuffTooltip(v); store.set('balanceBuffTooltip', v) }}
           />
         </SettingCard>
-        {/* 这个选人阶段退出，没找到合适的LCU接口，暂时加不了 */}
+        {/* Champ-select quit is disabled until a reliable LCU endpoint is available. */}
         {/* <SettingCard
           title="选人阶段退出按钮"
           description="非自定义对局的英雄选择里客户端不会显示退出按钮，Sona 帮你补一个。点击后会弹确认窗，秒退会扣逃跑分。"
@@ -658,6 +745,15 @@ export function ToolsPage() {
           <SonaSwitch
             checked={lobbyEnhancement}
             onChange={(v) => { setLobbyEnhancement(v); store.set('lobbyEnhancement', v) }}
+          />
+        </SettingCard>
+        <SettingCard
+          title={t('tools.hideEsportsPopup.title')}
+          description={t('tools.hideEsportsPopup.desc')}
+        >
+          <SonaSwitch
+            checked={hideEsportsPopup}
+            onChange={(v) => { setHideEsportsPopup(v); store.set('hideEsportsPopup', v) }}
           />
         </SettingCard>
       </SettingGroup>

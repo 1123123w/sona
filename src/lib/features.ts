@@ -1,8 +1,8 @@
 /**
- * 功能管理模块
+ * Feature management module.
  *
- * 监听 store 配置变化，自动开启/关闭对应的插件功能。
- * 在 index.tsx 的 load() 中调用 initFeatures() 即可。
+ * Watches store changes and toggles plugin features automatically.
+ * Call initFeatures() from index.tsx load().
  */
 
 import { logger } from '@/index'
@@ -14,6 +14,7 @@ import { sleep } from '@/lib/utils'
 import { updateBalanceBuffTooltip } from '@/lib/features/balance-buff-viewer'
 import { updateChampSelectQuitButton } from '@/lib/features/champselect-quit-button'
 import { updateAutoAccept } from '@/lib/features/auto-accept'
+import { updateAllowDeclineAfterAccept } from '@/lib/features/ready-check-control'
 import { updateDebugGameflow } from '@/lib/features/debug-gameflow'
 import { updateUnlockStatus } from '@/lib/features/unlock-status'
 import { updateBenchNoCooldown } from '@/lib/features/bench-no-cooldown'
@@ -25,23 +26,28 @@ import { updateAutoLockChampion } from '@/lib/features/auto-lock-champion'
 import { updateAutoBanChampion } from '@/lib/features/auto-ban-champion'
 import { updateGameAnalysisPopup } from '@/lib/features/game-analysis-popup'
 import { updateAutoReturnToLobby } from '@/lib/features/auto-return-to-lobby'
+import { updateGameModeFilter } from '@/lib/features/game-mode-filter'
+import { updateHideEsportsPopup } from '@/lib/features/hide-esports-popup'
+import { updateQuickLobbyMode } from '@/lib/features/quick-lobby-mode'
 import { installOpggBuildCacheClearHandler, updateOpggBuildRecommendation } from '@/lib/features/opgg-build-recommendation'
 import { installOpggBanCacheClearHandler, updateOpggBanRecommendation } from '@/lib/features/opgg-ban-recommendation'
 import { installOpggCounterCacheClearHandler, updateChampSelectCounterRecommendation } from '@/lib/features/champselect-counter-recommendation'
 import { installOpggTierCacheClearHandler, preloadChampSelectTierBadgeData, updateChampSelectTierBadge } from '@/lib/features/champselect-tier-badge'
 import {
+  refreshOfficialEntryHiding,
   setAvailabilityHijackEnabled,
   setHideAramModeEnabled,
   setHideArenaModeEnabled,
   setHideCustomGameSectionEnabled,
   setHideRightNavTextEnabled,
+  setHideTFTPlayCardEnabled,
   setHideSummonerRiftModesEnabled,
   setHideTFTEnabled,
 } from '@/lib/injections'
 import { calculateSonaPlayerStrengthScore, type SonaPlayerStrengthScore } from '@/lib/player-strength-score'
 import { initRuntimeState } from '@/lib/runtime-state'
 
-// ==================== 共享：查询队友胜率 ====================
+// ==================== Shared Teammate Win-Rate Query ====================
 
 type ChampSelectTeamPlayer = ChampSelectSession['myTeam'][number]
 
@@ -80,15 +86,15 @@ function getTeammateStatsKey(stat: TeammateStats): string {
   return `floor:${stat.floor}`
 }
 
-/** 去重：同一个 ChampSelect 阶段多个功能需要同一份数据时，复用同一轮请求 */
+/** Dedupe shared data requests within the same ChampSelect phase. */
 let _fetchTeamStatsPromise: Promise<TeamStatsResult> | null = null
 
 /**
- * 查询当前选人阶段所有队友的近期战绩
- * 使用 SGP 接口 + tag 参数按当前游戏模式服务端过滤，拉 100 条
- * 返回 { isBlue, queueId, stats[], fetchCount }
+ * Query recent match history for all teammates in the current ChampSelect.
+ * Uses SGP with server-side tag filtering for the current game mode.
+ * Returns { isBlue, queueId, stats[], fetchCount }.
  *
- * 多次并发调用会复用同一轮请求（promise 去重）
+ * Concurrent calls reuse one request promise.
  */
 async function fetchTeamStats(): Promise<TeamStatsResult> {
   if (_fetchTeamStatsPromise) return _fetchTeamStatsPromise
@@ -106,20 +112,20 @@ async function _doFetchTeamStats(): Promise<TeamStatsResult> {
   const localPlayer = session.myTeam.find((p) => p.cellId === session.localPlayerCellId)
   const isBlue = localPlayer ? localPlayer.cellId < 5 : true
 
-  // 直接从 ChampSelectSession 拿 queueId，无需额外请求
+  // Read queueId directly from ChampSelectSession without an extra request.
   const currentQueueId = session.queueId
   logger.info('[TeamStats] 当前队列 ID: %d', currentQueueId)
 
-  // 将 queueId 转为 SGP tag
+  // Convert queueId to SGP tag.
   const tag = queueIdToTag(currentQueueId)
 
-  // 取两个功能中较大的查询局数，确保数据充足（两者共用同一轮请求）
+  // Use the larger query size required by shared features so one request has enough data.
   const FETCH_COUNT = Math.max(
     store.get('champSelectAssistFetchCount') || 50,
     store.get('analyzeTeamPowerFetchCount') || 50,
   )
 
-  /** 构造占位元素：主播模式下队友 puuid 为空，无法查询战绩 */
+  /** Build a placeholder for streamer-mode teammates whose puuid is empty. */
   const placeholder = (player: ChampSelectTeamPlayer, i: number): TeammateStats => ({
     floor: i + 1,
     summonerId: player.summonerId,
@@ -136,9 +142,9 @@ async function _doFetchTeamStats(): Promise<TeamStatsResult> {
     strengthScore: null,
   })
 
-  // 并行查询所有队友的战绩（不过滤，保留占位以对齐楼层索引）
+  // Query all teammate histories in parallel and preserve placeholders for floor alignment.
   const stats = await Promise.all(session.myTeam.map(async (player, i) => {
-    // 主播模式下队友 puuid 为空，跳过查询，直接返回占位
+    // Streamer-mode teammate puuid is empty, so skip querying and return the placeholder.
     if (!player.puuid) {
       return placeholder(player, i)
     }
@@ -148,7 +154,7 @@ async function _doFetchTeamStats(): Promise<TeamStatsResult> {
       const gameName = player.gameName
       const tagLine = player.tagLine
 
-      // SGP 查询，tag 参数由服务端过滤
+      // SGP query; tag filtering is handled server-side.
       const resp = await lcu.getSgpMatchHistory(puuid, {
         startIndex: 0,
         count: FETCH_COUNT,
@@ -209,7 +215,7 @@ async function _doFetchTeamStats(): Promise<TeamStatsResult> {
   return { isBlue, queueId: currentQueueId, stats, fetchCount: FETCH_COUNT }
 }
 
-// ==================== 选人阶段头像胜率特效 (champSelectAssist) ====================
+// ==================== ChampSelect Avatar Win-Rate Assist ====================
 
 import { createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -219,33 +225,33 @@ const SONA_STATS_ATTR = 'data-sonaenhance-stats'
 const SONA_CLICK_ATTR = 'data-sonaenhance-click'
 const SONA_PLAYER_KEY_ATTR = 'data-sonaenhance-player-key'
 
-/** 每个楼层的完整战绩缓存 */
+/** Full stats cache for each floor. */
 let floorStats: TeammateStats[] = []
-/** puuid → TeammateStats 映射，用于换楼后按新顺序重建 floorStats */
+/** puuid to TeammateStats map, used to rebuild floorStats after swaps. */
 let statsByPuuid = new Map<string, TeammateStats>()
-/** summonerId → TeammateStats 映射，用于 puuid 不可用时兜底匹配 */
+/** summonerId to TeammateStats fallback map when puuid is unavailable. */
 let statsBySummonerId = new Map<number, TeammateStats>()
-/** 当前 DOM 展示顺序签名，用于位置互换后触发重绑 */
+/** Current DOM order signature, used to trigger rebinding after position swaps. */
 let currentChampSelectTeamSignature = ''
-/** 当前选人阶段的队列 ID，用于打开战绩弹窗时自动过滤 */
+/** Current ChampSelect queue ID, used as the default match-history modal filter. */
 let currentChampSelectQueueId = 0
 
-/** 选人阶段注入的 DOM 引用，离开 ChampSelect 时直接从 ref 清理，不依赖 querySelector */
+/** Injected DOM references, cleaned directly on ChampSelect exit without querySelector. */
 interface ChampSelectInjectedRef {
-  /** 我们创建的 stats div（胜率/KDA） */
+  /** Stats div created by us. */
   statsDiv: HTMLDivElement
-  /** 被修改了 style 的 iconContainer */
+  /** iconContainer whose style was modified. */
   iconContainer: HTMLElement
-  /** 被修改了 overflow 的 summonerContainer（可能为 null） */
+  /** summonerContainer whose overflow was modified, if present. */
   summonerContainer: HTMLElement | null
-  /** 被修改了 style 的 playerDetails */
+  /** playerDetails whose style was modified. */
   playerDetails: HTMLElement
-  /** iconContainer 上的 click handler，清理时需要 removeEventListener */
+  /** Click handler on iconContainer, removed during cleanup. */
   clickHandler: ((e: Event) => void) | null
 }
 let champSelectInjectedRefs: ChampSelectInjectedRef[] = []
 
-/** 战绩弹窗的独立 React root */
+/** Dedicated React root for the match-history modal. */
 let matchModalRoot: Root | null = null
 let matchModalContainer: HTMLDivElement | null = null
 
@@ -322,10 +328,10 @@ function buildFloorStatsFromSession(session: ChampSelectSession): TeammateStats[
     .map((player, index) => getCachedStatsForPlayer(player, index + 1))
 }
 
-/** 已挂载的 React root */
-/** 注入任务：给选人阶段补充右侧战绩信息 */
+/** Mounted React root. */
+/** Injection task: add right-side match stats during ChampSelect. */
 function tryInjectChampSelectTier(): boolean {
-  //  这里选择wrapper要额外加一个left，因为对方玩家的信息是看不到的，处理不了
+  // Add left here because enemy player information is not visible and cannot be handled.
   const wrappers = document.querySelectorAll('.party.visible .summoner-wrapper.visible.left')
   if (wrappers.length === 0 || floorStats.length === 0) return true
 
@@ -353,14 +359,14 @@ function tryInjectChampSelectTier(): boolean {
     const playerKey = getTeammateStatsKey(stat)
     iconContainer.setAttribute(SONA_PLAYER_KEY_ATTR, playerKey)
 
-    // ---- 头像点击 → 弹出战绩弹窗 ----
+    // ---- Avatar click: open match-history modal ----
     let clickHandler: ((e: Event) => void) | null = null
     if (!iconContainer.hasAttribute(SONA_CLICK_ATTR) && stat.puuid) {
       iconContainer.setAttribute(SONA_CLICK_ATTR, 'true')
       iconContainer.style.cursor = 'pointer'
       const boundPlayerKey = playerKey
       clickHandler = (e: Event) => {
-        // 放行 swap 按钮等内部交互元素的点击
+        // Let clicks on internal controls such as swap buttons pass through.
         const target = e.target as HTMLElement
         if (target.closest('.swap-button-component, .swap-button-btn')) return
 
@@ -374,7 +380,7 @@ function tryInjectChampSelectTier(): boolean {
       iconContainer.addEventListener('click', clickHandler, true)
     }
 
-    // ---- player-details 下方战绩文字 ----
+    // ---- Match stats below player-details ----
     const playerDetails = wrapper.querySelector('.player-details') as HTMLElement | null
     if (playerDetails && !playerDetails.querySelector(`[${SONA_STATS_ATTR}]`)) {
         playerDetails.style.position = 'relative'
@@ -402,7 +408,7 @@ function tryInjectChampSelectTier(): boolean {
         statsDiv.appendChild(kdaSpan)
         playerDetails.appendChild(statsDiv)
 
-        // 记录注入引用，离开 ChampSelect 时直接清理
+        // Record injected references for direct cleanup when leaving ChampSelect.
         champSelectInjectedRefs.push({ statsDiv, iconContainer, summonerContainer, playerDetails, clickHandler })
     }
   })
@@ -437,16 +443,16 @@ function unregisterTierInjection() {
 }
 
 
-/** 查询胜率并启动头像特效注入 */
+/** Query win rates and start avatar assist injection. */
 async function applyChampSelectAssistStats() {
   try {
-    // 先清理上一局的残留
+    // Clear leftovers from the previous game first.
     unregisterTierInjection()
 
     const { stats, queueId } = await fetchTeamStats()
     currentChampSelectQueueId = queueId
     floorStats = stats
-    // 建立 puuid → stats 映射，换楼后可用新 myTeam 顺序重建 floorStats
+    // Build puuid to stats mapping so swaps can rebuild floorStats in the new myTeam order.
     statsByPuuid.clear()
     statsBySummonerId.clear()
     for (const s of stats) {
@@ -463,17 +469,17 @@ async function applyChampSelectAssistStats() {
 }
 
 let champSelectAssistUnsub: (() => void) | null = null
-/** CHAMP_SELECT session 更新监听（用于换楼后重建 floorStats） */
+/** CHAMP_SELECT session update listener for rebuilding floorStats after swaps. */
 let champSelectUpdateUnsub: (() => void) | null = null
 
 /**
- * 当 ChampSelect session 更新时，检查 myTeam 的 puuid 顺序是否变化，
- * 如果变化（换楼），则按新顺序重建 floorStats 并重新注入
+ * When ChampSelect updates, check whether myTeam puuid order changed.
+ * If it changed, rebuild floorStats in the new order and reinject.
  */
 function onChampSelectUpdate(event: LCUEventMessage) {
-  // 只处理 Update 事件
+  // Only handle Update events.
   if (event.eventType !== 'Update') return
-  // 数据还没准备好就不处理
+  // Skip until data is ready.
   if (statsByPuuid.size === 0 && statsBySummonerId.size === 0) return
 
   const session = event.data as ChampSelectSession
@@ -484,18 +490,18 @@ function onChampSelectUpdate(event: LCUEventMessage) {
 
   logger.info('[ChampSelect] 检测到队友展示顺序或分路变化，重建头像战绩绑定')
 
-  // 清理旧注入并重建
+  // Clear old injections and rebuild.
   cleanupInjectedDOM()
   floorStats = buildFloorStatsFromSession(session)
   currentChampSelectTeamSignature = nextSignature
   tryInjectChampSelectTier()
 }
 
-/** 清理已注入的 DOM（但不重置 floorStats / statsByPuuid / 注入注册状态） */
+/** Clean injected DOM without resetting floorStats, stats maps, or registration state. */
 function cleanupInjectedDOM() {
   for (const ref of champSelectInjectedRefs) {
     ref.statsDiv.remove()
-    // 移除 click handler
+    // Remove click handler.
     if (ref.clickHandler) {
       ref.iconContainer.removeEventListener('click', ref.clickHandler, true)
     }
@@ -516,14 +522,14 @@ function updateChampSelectAssist(enabled: boolean) {
     champSelectAssistUnsub = lcu.observe(LcuEventUri.GAMEFLOW_PHASE_CHANGE, (event: LCUEventMessage) => {
       const phase = event.data as GameflowPhase
       if (phase === 'ChampSelect') {
-        // 立即清理上一局残留，确保新局开始时是干净的
+        // Clear previous-game leftovers immediately so the new game starts clean.
         unregisterTierInjection()
         applyChampSelectAssistStats()
       } else {
         unregisterTierInjection()
       }
     })
-    // 监听 ChampSelect session 更新，检测换楼
+    // Listen for ChampSelect session updates to detect floor swaps.
     champSelectUpdateUnsub = lcu.observe(LcuEventUri.CHAMP_SELECT, onChampSelectUpdate)
     logger.info('Champ select assist enabled ✓')
   } else if (!enabled && champSelectAssistUnsub) {
@@ -538,10 +544,10 @@ function updateChampSelectAssist(enabled: boolean) {
   }
 }
 
-// ==================== 选人阶段辅助信息 ====================
+// ==================== ChampSelect Assist Info ====================
 
 /**
- * 根据胜率和 KDA 给出 LOL 风格幽默评价
+ * Return a League-flavored short comment based on win rate and KDA.
  */
 export function getRating(winRate: number, kda: number): string {
   if (winRate >= 75 && kda >= 4.5) return '👑 峡谷通天代'
@@ -609,7 +615,7 @@ async function analyzeTeammates() {
 
     logger.info('└────────────────────')
 
-    // 等待聊天室就绪后发送
+    // Wait until chat is ready before sending.
     const msg = chatLines.join('\n')
     const msgType = store.get('analyzeTeamPowerMsgType') || 'celebration'
     for (let attempt = 0; attempt < 10; attempt++) {
@@ -648,7 +654,7 @@ function updateAnalyzeTeamPower(enabled: boolean) {
   }
 }
 
-// ==================== 选人阶段红蓝方提示 ====================
+// ==================== ChampSelect Side Indicator ====================
 
 async function sendSideIndicator() {
   try {
@@ -657,9 +663,9 @@ async function sendSideIndicator() {
     const isBlue = localPlayer ? localPlayer.cellId < 5 : true
     const sideText = isBlue ? '🔵 蓝方 (左下方)' : '🔴 红方 (右上方)'
 
-    // 注意：选人阶段暂时拿不到本局大乱斗随机地图。
-    // 实测 /lol-gameflow/v1/session 的 map.gameMutator / mapMutator 在 ChampSelect 阶段为空字符串，
-    // 客户端应当是进入游戏后才知道本局随机到嚎哭深渊、屠夫之桥或莲华栈桥，因此这里不展示地图名。
+    // ARAM map variants are not available during ChampSelect.
+    // /lol-gameflow/v1/session returns empty map.gameMutator / mapMutator at this stage,
+    // so the map name is intentionally not shown here.
     const msg = `Sona-E助手 ♫   本局${sideText}`
     const msgType = store.get('sideIndicatorMsgType') || 'celebration'
     for (let attempt = 0; attempt < 10; attempt++) {
@@ -698,12 +704,12 @@ function updateSideIndicator(enabled: boolean) {
   }
 }
 
-// ==================== 初始化 ====================
+// ==================== Initialization ====================
 
 
 /**
- * 初始化所有功能
- * 根据 store 当前值启用功能，并监听后续变化
+ * Initialize all features.
+ * Enables features from current store values and watches future changes.
  */
 let featuresInitialized = false
 
@@ -726,6 +732,9 @@ export function initFeatures() {
 
   updateAutoAccept(store.get(SETTING_KEYS.autoAcceptMatch))
   store.onChange(SETTING_KEYS.autoAcceptMatch, updateAutoAccept)
+
+  updateAllowDeclineAfterAccept(store.get('allowDeclineAfterAccept'))
+  store.onChange('allowDeclineAfterAccept', updateAllowDeclineAfterAccept)
 
   updateDebugGameflow(store.get('developerMode'))
   store.onChange('developerMode', updateDebugGameflow)
@@ -795,36 +804,70 @@ export function initFeatures() {
   updateAutoReturnToLobby(store.get('autoReturnToLobby'))
   store.onChange('autoReturnToLobby', updateAutoReturnToLobby)
   store.onChange('autoReturnMode', () => {
-    // 模式变化时，如果功能已启用，重新注册以应用新模式
+    // Re-register when mode changes so enabled features apply the new mode.
     if (store.get('autoReturnToLobby')) {
       updateAutoReturnToLobby(false)
       updateAutoReturnToLobby(true)
     }
   })
 
-  // 解锁在线状态切换（接管客户端按钮，弹自定义"隐身/手机在线"菜单）
+  // Unlock availability switching by taking over the client button with a custom menu.
   setAvailabilityHijackEnabled(store.get('unlockAvailability'))
   store.onChange('unlockAvailability', setAvailabilityHijackEnabled)
 
-  // 隐藏云顶之弈入口
+  // Hide TFT entry points.
   setHideTFTEnabled(store.get('hideTFT'))
-  store.onChange('hideTFT', setHideTFTEnabled)
+  store.onChange('hideTFT', (enabled) => {
+    setHideTFTEnabled(enabled)
+    refreshOfficialEntryHiding()
+  })
+
+  updateGameModeFilter(store.get('gameModeFilter'))
+  store.onChange('gameModeFilter', updateGameModeFilter)
+
+  updateQuickLobbyMode(store.get('quickLobbyMode'))
+  store.onChange('quickLobbyMode', updateQuickLobbyMode)
+
+  setHideTFTPlayCardEnabled(store.get('hideTFTPlayCard'))
+  store.onChange('hideTFTPlayCard', (enabled) => {
+    setHideTFTPlayCardEnabled(enabled)
+    refreshOfficialEntryHiding()
+  })
 
   setHideSummonerRiftModesEnabled(store.get('hideSummonerRiftModes'))
-  store.onChange('hideSummonerRiftModes', setHideSummonerRiftModesEnabled)
+  store.onChange('hideSummonerRiftModes', (enabled) => {
+    setHideSummonerRiftModesEnabled(enabled)
+    refreshOfficialEntryHiding()
+  })
 
   setHideAramModeEnabled(store.get('hideAramMode'))
-  store.onChange('hideAramMode', setHideAramModeEnabled)
+  store.onChange('hideAramMode', (enabled) => {
+    setHideAramModeEnabled(enabled)
+    refreshOfficialEntryHiding()
+  })
 
   setHideArenaModeEnabled(store.get('hideArenaMode'))
-  store.onChange('hideArenaMode', setHideArenaModeEnabled)
+  store.onChange('hideArenaMode', (enabled) => {
+    setHideArenaModeEnabled(enabled)
+    refreshOfficialEntryHiding()
+  })
 
   setHideCustomGameSectionEnabled(store.get('hideCustomGameSection'))
-  store.onChange('hideCustomGameSection', setHideCustomGameSectionEnabled)
+  store.onChange('hideCustomGameSection', (enabled) => {
+    setHideCustomGameSectionEnabled(enabled)
+    refreshOfficialEntryHiding()
+  })
 
-  // 隐藏主页右侧导航栏文字
+  // Hide home right-nav text.
   setHideRightNavTextEnabled(store.get('hideRightNavText'))
-  store.onChange('hideRightNavText', setHideRightNavTextEnabled)
+  store.onChange('hideRightNavText', (enabled) => {
+    setHideRightNavTextEnabled(enabled)
+    refreshOfficialEntryHiding()
+  })
+  refreshOfficialEntryHiding()
+
+  updateHideEsportsPopup(store.get('hideEsportsPopup'))
+  store.onChange('hideEsportsPopup', updateHideEsportsPopup)
 
   initRuntimeState()
 

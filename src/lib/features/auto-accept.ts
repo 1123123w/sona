@@ -1,27 +1,35 @@
 import { logger } from '@/index'
 import { SETTING_KEYS, store } from '@/lib/store'
 import { lcu, LcuEventUri } from '@/lib/lcu'
-import type { LCUEventMessage, GameflowPhase } from '@/lib/lcu'
+import type { LCUEventMessage, GameflowPhase, ReadyCheck } from '@/lib/lcu'
 import { DelayTask, type TaskSignal } from '@/lib/cancellable-task'
 
-// ==================== 自动接受对局 ====================
+// ==================== Auto Accept Match ====================
 
 const AUTO_ACCEPT_MAX_DELAY_MS = 15000
 const READY_CHECK_POLL_INTERVAL_MS = 200
 
 let autoAcceptUnsub: (() => void) | null = null
+let readyCheckUnsub: (() => void) | null = null
 let readyCheckPollTimer: ReturnType<typeof setInterval> | null = null
 const autoAcceptTask = new DelayTask()
 let activeAutoAcceptSignal: TaskSignal | null = null
+let hasAcceptedThisReadyCheck = false
+let userDeclinedThisReadyCheck = false
+let restReminderEndOfGameCounted = false
+let restReminderPaused = false
+let restReminderResumeUnsub: (() => void) | null = null
+let restReminderEnabledUnsub: (() => void) | null = null
+let restReminderAutoAcceptUnsub: (() => void) | null = null
 
 /**
- * 计算本次 accept 的延迟毫秒数：
- *   - minMs / maxMs 任一不是有限数、负数、或 max > 15000 → 视为无延迟（秒接）
- *   - min > max → 非法，秒接
- *   - min === max → 固定延迟
- *   - 否则 [min, max] 闭区间随机
+ * Calculate the delay for this accept attempt:
+ *   - non-finite minMs/maxMs, negative values, or max > 15000 means no delay
+ *   - min > max is invalid and falls back to no delay
+ *   - min === max uses a fixed delay
+ *   - otherwise randomize inside the inclusive [min, max] range
  *
- * 这里严格校验：哪怕是"玩家手滑输了 99999"这种也不会真睡那么久，直接秒接兜底。
+ * Strict validation prevents accidental very long delays from blocking acceptance.
  */
 function computeAcceptDelayMs(): number {
   const minMs = store.get(SETTING_KEYS.autoAcceptDelayMin)
@@ -36,7 +44,7 @@ function computeAcceptDelayMs(): number {
 
   if (!isValidRange) return 0
 
-  // [min, max] 均匀随机
+  // Uniform random value in [min, max].
   return Math.round(minMs + Math.random() * (maxMs - minMs))
 }
 
@@ -90,8 +98,87 @@ function startReadyCheckPolling(signal: TaskSignal) {
   }, READY_CHECK_POLL_INTERVAL_MS)
 }
 
+function suppressAutoAcceptForDecline(source: string) {
+  userDeclinedThisReadyCheck = true
+  hasAcceptedThisReadyCheck = true
+  clearAutoAcceptTimer()
+  logger.info('[AutoAccept] 检测到玩家拒绝 ReadyCheck，取消本次自动接受: %s', source)
+}
+
+export function notifyUserManuallyDeclined() {
+  suppressAutoAcceptForDecline('manual-click')
+}
+
+export function notifyUserManuallyAccepted() {
+  hasAcceptedThisReadyCheck = true
+  userDeclinedThisReadyCheck = false
+  clearAutoAcceptTimer()
+  logger.info('[AutoAccept] 检测到玩家手动接受 ReadyCheck，取消待执行的延迟自动接受')
+}
+
+function normalizeRestReminderLimit(): number {
+  const limit = store.get('restReminderAcceptLimit')
+  if (!Number.isFinite(limit)) return 2
+  return Math.max(1, Math.floor(limit))
+}
+
+function recordRestReminderCompletedGame() {
+  if (!store.get('restReminderEnabled')) return
+
+  const limit = normalizeRestReminderLimit()
+  const nextCount = Math.max(0, Math.floor(store.get('restReminderAcceptCount') || 0)) + 1
+  store.set('restReminderAcceptCount', nextCount)
+
+  if (nextCount < limit) {
+    logger.info('[RestReminder] 已完成对局计数: %d/%d', nextCount, limit)
+    return
+  }
+
+  restReminderPaused = true
+  store.set('autoAcceptMatch', false)
+  store.set('restReminderAcceptCount', 0)
+  clearAutoAcceptTimer()
+  logger.info('[RestReminder] 已完成 %d 局，暂停自动接受；手动寻找对局后将自动恢复', limit)
+}
+
+export function isRestReminderPaused(): boolean {
+  return restReminderPaused
+}
+
+function ensureRestReminderPauseResumeObserver() {
+  if (!restReminderResumeUnsub) {
+    restReminderResumeUnsub = lcu.observe(LcuEventUri.GAMEFLOW_PHASE_CHANGE, (event: LCUEventMessage) => {
+      const phase = event.data as GameflowPhase
+      if (
+        phase === 'Matchmaking' &&
+        restReminderPaused &&
+        store.get('restReminderEnabled') &&
+        !store.get('autoAcceptMatch')
+      ) {
+        restReminderPaused = false
+        store.set('restReminderAcceptCount', 0)
+        store.set('autoAcceptMatch', true)
+        logger.info('[RestReminder] 检测到手动寻找对局，已恢复自动接受')
+      }
+    })
+  }
+
+  restReminderEnabledUnsub ??= store.onChange('restReminderEnabled', (enabled) => {
+    if (!enabled) {
+      restReminderPaused = false
+      store.set('restReminderAcceptCount', 0)
+    }
+  })
+
+  restReminderAutoAcceptUnsub ??= store.onChange('autoAcceptMatch', (enabled) => {
+    if (enabled) {
+      restReminderPaused = false
+    }
+  })
+}
+
 function scheduleAcceptMatch() {
-  // 清理可能残留的上次调度（防御性）
+  // Clear any leftover previous schedule defensively.
   clearAutoAcceptTimer()
 
   const delayMs = computeAcceptDelayMs()
@@ -112,7 +199,9 @@ function scheduleAcceptMatch() {
       if (signal.cancelled) return
 
       lcu.acceptMatch()
-        .then(() => logger.info('Auto accepted match ✓ (delay=%dms)', delayMs))
+        .then(() => {
+          logger.info('Auto accepted match ✓ (delay=%dms)', delayMs)
+        })
         .catch((err) => logger.error('Auto accept failed:', err))
     } finally {
       if (activeAutoAcceptSignal === signal) {
@@ -129,21 +218,50 @@ function scheduleAcceptMatch() {
 }
 
 export function updateAutoAccept(enabled: boolean) {
+  ensureRestReminderPauseResumeObserver()
+
   if (enabled && !autoAcceptUnsub) {
     autoAcceptUnsub = lcu.observe(LcuEventUri.GAMEFLOW_PHASE_CHANGE, (event: LCUEventMessage) => {
       const phase = event.data as GameflowPhase
       if (phase === 'ReadyCheck') {
-        scheduleAcceptMatch()
-      } else if (activeAutoAcceptSignal || autoAcceptTask.active || readyCheckPollTimer) {
-        // ReadyCheck 窗口关闭（玩家手动拒绝 / 自动超时 / 队友拒绝）时清掉定时器，
-        // 避免我们稍后的 accept 在"下一次 ReadyCheck 到来前"误触
-        clearAutoAcceptTimer()
+        if (!hasAcceptedThisReadyCheck && !userDeclinedThisReadyCheck) {
+          hasAcceptedThisReadyCheck = true
+          scheduleAcceptMatch()
+        }
+      } else if (phase === 'InProgress') {
+        restReminderEndOfGameCounted = false
+      } else if (phase === 'EndOfGame') {
+        if (!restReminderEndOfGameCounted) {
+          restReminderEndOfGameCounted = true
+          recordRestReminderCompletedGame()
+        }
+      } else {
+        hasAcceptedThisReadyCheck = false
+        userDeclinedThisReadyCheck = false
+        if (activeAutoAcceptSignal || autoAcceptTask.active || readyCheckPollTimer) {
+          // Clear the timer when the ReadyCheck window closes, whether by manual decline,
+          // timeout, or teammate decline, to avoid accepting a later ReadyCheck by mistake.
+          clearAutoAcceptTimer()
+        }
+      }
+    })
+    readyCheckUnsub = lcu.observe(LcuEventUri.READY_CHECK, (event: LCUEventMessage) => {
+      const readyCheck = event.data as ReadyCheck | null
+      if (readyCheck?.playerResponse === 'Declined') {
+        suppressAutoAcceptForDecline('ready-check-event')
       }
     })
     logger.info('Auto accept enabled ✓')
   } else if (!enabled && autoAcceptUnsub) {
     autoAcceptUnsub()
     autoAcceptUnsub = null
+    if (readyCheckUnsub) {
+      readyCheckUnsub()
+      readyCheckUnsub = null
+    }
+    hasAcceptedThisReadyCheck = false
+    userDeclinedThisReadyCheck = false
+    restReminderEndOfGameCounted = false
     clearAutoAcceptTimer()
     logger.info('Auto accept disabled')
   }

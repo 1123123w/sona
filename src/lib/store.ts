@@ -1,138 +1,157 @@
 /**
- * Sona 插件配置管理
+ * Sona plugin configuration manager.
  *
- * 基于 Pengu Loader 的 DataStore API 实现持久化存储。
- * 所有配置项集中管理，带类型安全和默认值。
+ * Persists settings with the Pengu Loader DataStore API.
+ * All config keys are centralized with types and defaults.
  *
- * 使用方式：
+ * Usage:
  * ```ts
  * import { store } from '@/lib/store'
  *
- * // 读取
+ * // Read
  * const value = store.get('autoAcceptMatch')
  *
- * // 写入（自动持久化）
+ * // Write and persist automatically
  * store.set('autoAcceptMatch', true)
  *
- * // 监听变化
+ * // Watch changes
  * store.onChange('autoAcceptMatch', (value) => { ... })
  * ```
  */
 
-// ==================== 配置项定义 ====================
+// ==================== Config Definitions ====================
 
-/** 所有配置项及其类型 */
+/** All config keys and their value types. */
 export interface SonaConfig {
-  /** 自动接受对局 */
+  /** Auto-accept ready checks. */
   autoAcceptMatch: boolean
-  /** 自动接受对局的随机延迟：最小值（毫秒），0 或非法值视为无延迟 */
+  /** Keep the opposite ReadyCheck action clickable after accepting or declining. */
+  allowDeclineAfterAccept: boolean
+  /** Minimum random auto-accept delay in milliseconds. */
   autoAcceptDelayMin: number
-  /** 自动接受对局的随机延迟：最大值（毫秒），上限 15000；非法则秒接 */
+  /** Maximum random auto-accept delay in milliseconds. */
   autoAcceptDelayMax: number
-  /** 开发者模式 */
+  /** Disable auto accept after a configurable number of successful accepts. */
+  restReminderEnabled: boolean
+  /** Auto accept count that triggers rest reminder. */
+  restReminderAcceptLimit: number
+  /** Current auto accept count for rest reminder. */
+  restReminderAcceptCount: number
+  /** Developer mode. */
   developerMode: boolean
-  /** 解锁自定义签名 */
+  /** Unlock custom status messages. */
   unlockStatus: boolean
-  /** 解锁在线状态切换（接管客户端状态按钮，支持"隐身/手机在线"等） */
+  /** Unlock availability switching by hijacking the client status button. */
   unlockAvailability: boolean
-  /** 大乱斗无CD换英雄 */
+  /** Remove ARAM bench swap cooldown. */
   benchNoCooldown: boolean
-  /** 侧边栏收缩状态 */
+  /** Sidebar collapsed state. */
   sidebarCollapsed: boolean
-  /** 在线状态 */
+  /** Availability state. */
   availability: string
-  /** 自定义签名（按 puuid 独立存储，切换账号互不影响） */
+  /** Custom status message stored per PUUID. */
   statusMessage: Record<string, string>
-  /** 面板快捷键 */
+  /** Panel hotkey. */
   hotkey: string
-  /** 界面语言 */
+  /** UI language. */
   language: 'zh-CN' | 'zh-TW' | 'en-US'
-  /** 窗口视觉特效 */
-  /** 英雄选择玩家头像交互（点击队友头像展示历史数据） */
+  /** Window visual effect. */
+  /** Champ-select avatar interaction for player history. */
   champSelectAssist: boolean
-  /** OP.GG 配装推荐（接管选好英雄后的技能预览面板点击） */
+  /** OP.GG build recommendation entry. */
   opggBuildRecommendation: boolean
-  /** 锁定英雄后自动应用 OP.GG 推荐符文 */
+  /** Auto-apply OP.GG recommended runes after locking a champion. */
   opggAutoApplyRunes: boolean
   champSelectCounterRecommendation: boolean
-  /** 智能配装（后续扩展符文、召唤师技能持久化） */
+  /** Smart build configuration. */
   smartBuildRecommendation: boolean
-  /** 智能符文：按英雄与模式保存的用户符文页 */
+  /** Smart runes saved by champion and mode. */
   smartRunePages: Record<string, {
     primaryStyleId: number
     subStyleId: number
     selectedPerkIds: number[]
     updatedAt: number
   }>
-  /** 智能召唤师技能：按英雄与模式保存的技能组合 */
+  /** Smart summoner spells saved by champion and mode. */
   smartSummonerSpells: Record<string, {
     spell1Id: number
     spell2Id: number
     updatedAt: number
   }>
-  /** 游戏设置备份：按 puuid 保存多个命名备份 */
+  /** Game setting backups stored per PUUID. */
   gameSettingsBackups: Record<string, Record<string, {
     general?: unknown
     input?: unknown
     timestamp: number
   }>>
-  /** OP.GG 配装推荐段位过滤 */
+  /** OP.GG recommendation tier filter. */
   opggBuildRecommendationTier: string
-  /** 分析友方战力（进入选人自动查战绩并发送到聊天框） */
+  /** Analyze ally strength in champ select. */
   analyzeTeamPower: boolean
-  /** 分析友方战力消息类型: chat=队友可见, celebration=仅自己可见 */
+  /** Ally analysis message type. */
   analyzeTeamPowerMsgType: string
-  /** 战绩查询局数（20/50/100），默认50 */
+  /** Match-history fetch count for ally analysis. */
   analyzeTeamPowerFetchCount: number
-  /** 英雄选择增强查询局数（20/50/100），默认50 */
+  /** Match-history fetch count for champ-select assist. */
   champSelectAssistFetchCount: number
-  /** 全局战力分析查询局数（20/50/100），默认50 */
+  /** Match-history fetch count for game analysis. */
   gameAnalysisFetchCount: number
-  /** 选人阶段红蓝方提示（进入英雄选择时在聊天框提示当前阵营） */
+  /** Side indicator shown in champ select. */
   sideIndicator: boolean
-  /** 红蓝方提示消息类型: chat=队友可见, celebration=仅自己可见 */
+  /** Side indicator message type. */
   sideIndicatorMsgType: string
-  /** 好友智能分组（开黑好友用同样颜色的border-right展示） */
+  /** Friend smart grouping. */
   friendSmartGroup: boolean
-  /** 增强游戏中好友状态（显示模式、英雄和实时对局时长） */
+  /** Enhanced in-game friend status. */
   enhancedFriendGameStatus: boolean
-  /** 组队界面增强（点击成员头像查看战绩，并显示近期表现） */
+  /** Lobby member match-history enhancement. */
   lobbyEnhancement: boolean
-  /** 组队界面增强查询局数（20/50/100），默认50 */
+  /** Match-history fetch count for lobby enhancement. */
   lobbyEnhancementFetchCount: number
-  /** 无视他人生涯隐私（XHR 响应改写，需重启生效） */
+  /** Ignore profile privacy by rewriting XHR responses. Requires restart. */
   ignoreProfilePrivacy: boolean
-  /** 隐藏客户端云顶之弈入口 */
+  /** Hide the client TFT entry. */
   hideTFT: boolean
+  /** Inject Play-page chips to hide/show rendered PVP mode cards. */
+  gameModeFilter: boolean
+  /** Hidden Play-page game mode cards by data-game-mode value. */
+  hiddenGameModes: Record<string, boolean>
+  hideTFTPlayCard: boolean
   hideSummonerRiftModes: boolean
   hideAramMode: boolean
   hideArenaMode: boolean
   hideCustomGameSection: boolean
-  /** 隐藏主页右侧导航栏文字（仅保留图标） */
+  /** Hide right navigation text and keep icons only. */
   hideRightNavText: boolean
-  /** 对局结束自动点赞 */
+  /** Hide official esports livestream popup iframe. */
+  hideEsportsPopup: boolean
+  /** Click Play to directly create a lobby for a configured queue. */
+  quickLobbyMode: boolean
+  /** Target queue id for quick lobby mode. */
+  quickLobbyQueueId: number
+  /** Auto-honor after game end. */
   autoHonor: boolean
-  /** 秒抢英雄开关 */
+  /** Auto-lock champion feature toggle. */
   autoLockChampion: boolean
-  /** 秒抢目标英雄优先级队列 */
+  /** Auto-lock champion priority list. */
   autoLockChampionIds: number[]
-  /** 秒抢时是否直接锁定（false 则只选择不锁定） */
+  /** Whether auto-lock should lock immediately instead of only selecting. */
   autoLockInstant: boolean
-  /** 自动禁用英雄开关 */
+  /** Auto-ban champion feature toggle. */
   autoBanChampion: boolean
-  /** 自动禁用目标英雄优先级队列 */
+  /** Auto-ban champion priority list. */
   autoBanChampionIds: number[]
-  /** 平衡性调整 buff 提示（游玩特定模式时悬停头像显示数值调整） */
+  /** Balance modifier tooltip shown on champion avatar hover. */
   balanceBuffTooltip: boolean
-  /** 国服解锁炫彩分页（生涯藏品页显示"炫彩"tab，需重启客户端） */
+  /** Unlock chroma tab in the collection page. Requires restart. */
   unlockChromas: boolean
-  /** 选人阶段退出按钮（非自定义对局的英雄选择里补上"退出对局"按钮） */
+  /** Champ-select quit button for non-custom games. */
   champSelectQuitButton: boolean
-  /** 进入游戏后自动弹窗显示全局战力分析 */
+  /** Show game analysis modal after entering a game. */
   gameAnalysisPopup: boolean
-  /** 对局结束后自动返回房间 */
+  /** Return to lobby after game end. */
   autoReturnToLobby: boolean
-  /** 自动返回模式: queue=自动排队, lobby=仅返回房间 */
+  /** Auto-return mode. */
   autoReturnMode: string
 }
 
@@ -151,8 +170,12 @@ export interface SettingDefinition<K extends ConfigKey = ConfigKey> {
 
 export const SETTING_KEYS = {
   autoAcceptMatch: 'autoAcceptMatch',
+  allowDeclineAfterAccept: 'allowDeclineAfterAccept',
   autoAcceptDelayMin: 'autoAcceptDelayMin',
   autoAcceptDelayMax: 'autoAcceptDelayMax',
+  restReminderEnabled: 'restReminderEnabled',
+  restReminderAcceptLimit: 'restReminderAcceptLimit',
+  restReminderAcceptCount: 'restReminderAcceptCount',
   opggBuildRecommendation: 'opggBuildRecommendation',
   opggAutoApplyRunes: 'opggAutoApplyRunes',
   smartBuildRecommendation: 'smartBuildRecommendation',
@@ -199,9 +222,13 @@ const HIGH_RISK_DEFAULT_CONFIG = createHighRiskDefaultConfig()
 
 
 
-/** 配置项默认值 */
+/** Default config values. */
 const DEFAULT_CONFIG: SonaConfig = {
   ...HIGH_RISK_DEFAULT_CONFIG,
+  allowDeclineAfterAccept: true,
+  restReminderEnabled: false,
+  restReminderAcceptLimit: 2,
+  restReminderAcceptCount: 0,
   developerMode: false,
   unlockStatus: true,
   unlockAvailability: false,
@@ -227,11 +254,17 @@ const DEFAULT_CONFIG: SonaConfig = {
   lobbyEnhancement: false,
   lobbyEnhancementFetchCount: 50,
   hideTFT: false,
+  gameModeFilter: false,
+  hiddenGameModes: {},
+  hideTFTPlayCard: false,
   hideSummonerRiftModes: false,
   hideAramMode: false,
   hideArenaMode: false,
   hideCustomGameSection: false,
   hideRightNavText: false,
+  hideEsportsPopup: true,
+  quickLobbyMode: false,
+  quickLobbyQueueId: 430,
   ignoreProfilePrivacy: true,
   autoHonor: false,
   autoLockChampion: false,
@@ -249,9 +282,9 @@ const DEFAULT_CONFIG: SonaConfig = {
 
 
 
-// ==================== Store 实现 ====================
+// ==================== Store Implementation ====================
 
-/** DataStore 键前缀，避免与其他插件冲突 */
+/** DataStore key prefix to avoid conflicts with other plugins. */
 const KEY_PREFIX = 'sonaenhance:'
 
 type ChangeListener<K extends ConfigKey = ConfigKey> = (value: SonaConfig[K], key: K) => void
@@ -261,7 +294,7 @@ class SonaStore {
   private cache: SonaConfig
 
   constructor() {
-    // 启动时把所有配置加载到内存缓存中
+    // Load all config values into memory at startup.
     const loaded = { ...DEFAULT_CONFIG }
     for (const key of Object.keys(DEFAULT_CONFIG) as ConfigKey[]) {
       (loaded as Record<string, unknown>)[key] = this.readFromDisk(key)
@@ -270,14 +303,14 @@ class SonaStore {
   }
 
   /**
-   * 获取配置值
+   * Gets a config value.
    */
   get<K extends ConfigKey>(key: K): SonaConfig[K] {
     return this.cache[key]
   }
 
   /**
-   * 设置配置值（自动持久化 + 触发监听）
+   * Sets a config value, persists it, and notifies listeners.
    */
   set<K extends ConfigKey>(key: K, value: SonaConfig[K]) {
     const old = this.cache[key]
@@ -286,7 +319,7 @@ class SonaStore {
     this.cache[key] = value
     DataStore.set(`${KEY_PREFIX}${key}`, value)
 
-    // 触发变化监听
+    // Notify change listeners.
     const keyListeners = this.listeners.get(key)
     if (keyListeners) {
       keyListeners.forEach((fn) => {
@@ -300,7 +333,7 @@ class SonaStore {
   }
 
   /**
-   * 切换布尔值配置
+   * Toggles a boolean config value.
    */
   toggle<K extends ConfigKey>(key: K): SonaConfig[K] {
     const current = this.get(key)
@@ -311,8 +344,8 @@ class SonaStore {
   }
 
   /**
-   * 监听配置变化
-   * @returns 取消监听的函数
+   * Watches config changes.
+   * @returns Unsubscribe function.
    */
   onChange<K extends ConfigKey>(key: K, fn: ChangeListener<K>): () => void {
     let keyListeners = this.listeners.get(key)
@@ -328,7 +361,7 @@ class SonaStore {
   }
 
   /**
-   * 重置所有配置为默认值
+   * Resets all config values to defaults.
    */
   resetAll() {
     for (const key of Object.keys(DEFAULT_CONFIG) as ConfigKey[]) {
@@ -337,14 +370,14 @@ class SonaStore {
   }
 
   /**
-   * 重置单个配置为默认值
+   * Resets one config value to its default.
    */
   reset<K extends ConfigKey>(key: K) {
     this.set(key, DEFAULT_CONFIG[key])
   }
 
   /**
-   * 获取所有配置的快照
+   * Returns a snapshot of all config values.
    */
   getAll(): SonaConfig {
     const result = { ...DEFAULT_CONFIG }
@@ -354,7 +387,7 @@ class SonaStore {
     return result
   }
 
-  // ---- 内部方法 ----
+  // ---- Internals ----
 
   private readFromDisk<K extends ConfigKey>(key: K): SonaConfig[K] {
     const stored = DataStore.get<SonaConfig[K]>(`${KEY_PREFIX}${key}`)
@@ -364,7 +397,7 @@ class SonaStore {
   }
 }
 
-// ==================== 单例导出 ====================
+// ==================== Singleton Export ====================
 
-/** Sona 配置管理器单例 */
+/** Sona config manager singleton. */
 export const store = new SonaStore()
