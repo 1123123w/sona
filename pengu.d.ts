@@ -7,24 +7,25 @@ import type { Root } from 'react-dom/client'
 
 declare global {
   interface PenguContext {
+    meta: {
+      name: string
+      version?: string
+      [key: string]: unknown
+    }
     rcp: {
       preInit: (name: string, callback: (api: unknown) => void) => void
       /**
-       * 当指定 RCP 模块初始化后触发回调。
+       * Runs the callback after the target RCP module initializes.
        *
-       * @param name 目标 RCP 模块名（如 'rcp-fe-ember-libs'）
-       * @param callback 收到该模块 api 对象的回调
-       * @param blocking 关键参数：
-       *   - false（默认）：仅对"未来的初始化事件"生效；若目标模块已经初始化过，回调不会补跑。
-       *                    这意味着 Pengu HMR / 页面 reload 后注册的回调可能错过时机。
-       *   - true：即使目标模块已初始化，也会用缓存 api 立即补跑一次回调；
-       *           且目标模块会等回调 Promise 完成才继续后续初始化——
-       *           hook 类用法（如劫持 getEmber）必须传 true，否则可能漏过劫持窗口。
+       * @param name Target RCP module name, such as 'rcp-fe-ember-libs'.
+       * @param callback Callback that receives the module API object.
+       * @param blocking Controls whether already-initialized modules are replayed.
+       *   - false: only future initialization events are observed.
+       *   - true: replay with the cached API when available, and block later initialization until the callback finishes.
        */
       postInit: (name: string, callback: (api: unknown) => unknown, blocking?: boolean) => void
       /**
-       * 像 postInit 一样等待 RCP 就绪，但以 Promise 方式返回，**即使目标插件已经加载完也能拿到**。
-       * 是比 postInit 更健壮的选择——不受插件加载时机影响。
+       * Promise-based equivalent of postInit that also resolves for modules already loaded.
        *
        * @example
        *   const chat = await context.rcp.whenReady('rcp-be-lol-chat')
@@ -34,7 +35,7 @@ declare global {
         (name: string): Promise<unknown>
         (names: string[]): Promise<unknown[]>
       }
-      /** 同步获取已注册到 callbacks map 的 RCP 插件（需先通过 whenReady/postInit 注册） */
+      /** Synchronously returns an RCP plugin already registered in the callback map. */
       get: (name: string) => unknown
     }
     socket: {
@@ -88,31 +89,31 @@ declare global {
   }
 
   /**
-   * DataStore - 持久化存储 API
-   * 数据以 JSON 格式存储在磁盘上
+   * DataStore persistent storage API.
+   * Data is stored on disk as JSON.
    * @see https://pengu.lol/runtime-api/data-store
    */
   const DataStore: {
-    /** 存储数据，返回是否成功 */
+    /** Stores data and returns whether it succeeded. */
     set(key: string | number, value: unknown): boolean
-    /** 读取数据，不存在时返回 fallback 或 undefined */
+    /** Reads data, returning the fallback or undefined when missing. */
     get<T = unknown>(key: string | number, fallback?: T): T | undefined
-    /** 检查键是否存在 */
+    /** Checks whether a key exists. */
     has(key: string | number): boolean
-    /** 移除数据，返回是否成功 */
+    /** Removes data and returns whether it succeeded. */
     remove(key: string | number): boolean
   }
 
   /**
-   * Effect - 窗口视觉效果 API
+   * Window visual effect API.
    * @see https://pengu.dev/runtime-api/effect
    */
   const Effect: {
-    /** 应用窗口视觉效果 */
+    /** Applies a window visual effect. */
     apply(name: 'transparent' | 'blurbehind' | 'acrylic' | 'unified' | 'mica' | 'vibrancy', options?: { color?: string; material?: string; alwaysOn?: boolean }): void
-    /** 清除当前效果 */
+    /** Clears the current effect. */
     clear(): void
-    /** 设置主题 */
+    /** Sets the theme. */
     setTheme(theme: 'light' | 'dark'): void
   }
 

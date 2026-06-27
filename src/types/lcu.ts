@@ -1,13 +1,13 @@
 /**
- * LCU (League Client Update) 接口类型定义
+ * LCU (League Client Update) interface types.
  *
- * 基于 LCU Swagger 定义 (客户端版本 26.05) 和 LeagueAkari 类型定义校验
+ * Checked against LCU Swagger definitions for client 26.05 and LeagueAkari types.
  * @see https://lcu.kebs.dev/swagger.html
  */
 
-// ==================== 召唤师相关 ====================
+// ==================== Summoner ====================
 
-/** ARAM 重随点数 */
+/** ARAM reroll points. */
 export interface RerollPoints {
   currentPoints: number
   maxRolls: number
@@ -16,7 +16,7 @@ export interface RerollPoints {
   pointsToReroll: number
 }
 
-/** 当前召唤师信息 — GET /lol-summoner/v1/current-summoner */
+/** Current summoner info from GET /lol-summoner/v1/current-summoner. */
 export interface SummonerInfo {
   accountId: number
   displayName: string
@@ -36,9 +36,9 @@ export interface SummonerInfo {
   xpUntilNextLevel: number
 }
 
-// ==================== 房间/大厅相关 ====================
+// ==================== Lobby ====================
 
-/** 房间配置（用于 POST /lol-lobby/v2/lobby 创建房间） */
+/** Lobby config used by POST /lol-lobby/v2/lobby. */
 export interface LobbyConfig {
   queueId?: number
   gameConfig?: {
@@ -62,7 +62,7 @@ export interface LobbyConfig {
   isCustom?: boolean
 }
 
-/** 房间游戏配置 — GET /lol-lobby/v2/lobby 中的 gameConfig 字段 */
+/** Lobby gameConfig field from GET /lol-lobby/v2/lobby. */
 export interface LobbyGameConfig {
   allowablePremadeSizes: number[]
   customLobbyName: string
@@ -87,7 +87,7 @@ export interface LobbyGameConfig {
   showQuickPlaySlotSelection: boolean
 }
 
-/** 房间信息 — GET /lol-lobby/v2/lobby */
+/** Lobby info from GET /lol-lobby/v2/lobby. */
 export interface Lobby {
   canStartActivity: boolean
   gameConfig: LobbyGameConfig
@@ -109,7 +109,7 @@ export interface Lobby {
   warnings: unknown[]
 }
 
-/** 房间邀请 */
+/** Lobby invitation. */
 export interface LobbyInvitation {
   invitationId: string
   invitationType: string
@@ -119,7 +119,7 @@ export interface LobbyInvitation {
   toSummonerName: string
 }
 
-/** 房间成员 — GET /lol-lobby/v2/lobby/members */
+/** Lobby member from GET /lol-lobby/v2/lobby/members. */
 export interface LobbyMember {
   allowedChangeActivity: boolean
   allowedInviteOthers: boolean
@@ -151,7 +151,7 @@ export interface LobbyMember {
   teamId: number
 }
 
-// ==================== 好友相关 ====================
+// ==================== Friends ====================
 
 export type LolGameMode =
   | 'CLASSIC'
@@ -192,151 +192,149 @@ export type LolRankedTier =
   | (string & {})
 
 /**
- * 好友 / ChatMe 共用的 LOL 子状态字段
+ * LOL sub-state fields shared by friends and ChatMe.
  *
- * 注意：
- *   1. 字段全部是**字符串**（即使看起来像数字/ID/布尔也是 "123" / "true" 这种字符串形式），
- *      这是 XMPP presence payload 的历史遗产
- *   2. 字段非常**稀疏** —— 玩家当前不在游戏中时大量字段会缺失或空字符串
- *   3. 这份接口覆盖了目前观察到的字段；Riot 随版本会加新字段，未识别字段不应报错
- *      （所以上面的字段都是可选的）
+ * Notes:
+ *   1. All fields are strings, even numeric IDs or booleans, due to XMPP presence history.
+ *   2. Fields are sparse; many are missing or empty when the player is not in game.
+ *   3. Riot may add fields over time, so unknown fields should not be treated as errors.
  */
 export interface LolSubStatus {
-  /** 选中的横幅 ID */
+  /** Selected banner ID. */
   bannerIdSelected?: string
-  /** 挑战水晶等级：IRON/BRONZE/SILVER/GOLD/PLATINUM/DIAMOND/MASTER/GRANDMASTER/CHALLENGER */
+  /** Challenge crystal level. */
   challengeCrystalLevel?: string
-  /** 挑战点数（字符串形式） */
+  /** Challenge points as string. */
   challengePoints?: string
-  /** 选中展示的 3 个挑战 token（逗号分隔） */
+  /** Three selected challenge tokens, comma-separated. */
   challengeTokensSelected?: string
-  /** 当前使用的英雄 ID；TFT 通常为 "" */
+  /** Current champion ID; TFT usually uses an empty string. */
   championId?: string
-  /** 小小英雄 ID；TFT 中代表当前小小英雄，普通 LOL 也可能存在 */
+  /** Companion ID; in TFT this represents the current Little Legend. */
   companionId?: string
-  /** 击杀特效皮肤 ID；TFT 中通常对应棋盘/特效装饰 */
+  /** Kill effect skin ID, often board/effect decoration in TFT. */
   damageSkinId?: string
-  /** 当前对局 ID（"" 或 undefined 表示不在对局） */
+  /** Current game ID; empty or undefined means not in game. */
   gameId?: string
-  /** 游戏模式：CLASSIC/ARAM/CHERRY/TFT/KIWI/URF/ARURF 等 */
+  /** Game mode such as CLASSIC/ARAM/CHERRY/TFT/KIWI/URF/ARURF. */
   gameMode?: LolGameMode
-  /** 队列类型（如 CHERRY/RANKED_TFT/RANKED_SOLO_5x5，和 queueId 二选一存在） */
+  /** Queue type, sometimes present instead of queueId. */
   gameQueueType?: string
-  /** 游戏状态：outOfGame / inQueue / championSelect / inGame / spectating 等 */
+  /** Game status such as outOfGame, inQueue, championSelect, inGame, or spectating. */
   gameStatus?: LolGameStatus
-  /** 头像覆盖：普通 LOL 多为 "summonerIcon"，TFT 多为 "companion"，未覆盖为 "" */
+  /** Icon override; regular LoL often uses summonerIcon, TFT often companion. */
   iconOverride?: LolIconOverride
-  /** 是否可被观战：ALL / FRIENDS / NONE */
+  /** Spectator permission: ALL / FRIENDS / NONE. */
   isObservable?: string
-  /** 传说精通分数 */
+  /** Legendary mastery score. */
   legendaryMasteryScore?: string
-  /** 召唤师等级 */
+  /** Summoner level. */
   level?: string
-  /** 地图 ID（"11" 召唤师峡谷 / "12" 嚎哭深渊 等） */
+  /** Map ID. */
   mapId?: string
-  /** 地图皮肤 ID */
+  /** Map skin ID. */
   mapSkinId?: string
-  /** 选中的玩家称号 UUID */
+  /** Selected title UUID. */
   playerTitleSelected?: string
-  /** 头像图标 ID（字符串） */
+  /** Icon ID as string. */
   profileIcon?: string
-  /** 组队信息（通常为 ""） */
+  /** Party information, usually empty. */
   pty?: string
-  /** 组队开放状态：open / closed */
+  /** Party availability: open / closed. */
   ptyType?: string
-  /** 玩家 PUUID */
+  /** Player PUUID. */
   puuid?: string
-  /** 队列 ID（数字的字符串形式，如 "2400" 代表大乱斗） */
+  /** Queue ID as numeric string. */
   queueId?: string
-  /** 当前赛季排位子段位：I/II/III/IV；大师及以上或 TFT 场景常见 NA */
+  /** Current season ranked division. */
   rankedLeagueDivision?: LolRankedDivision
-  /** 当前赛季排位队列：RANKED_SOLO_5x5 / RANKED_FLEX_SR / RANKED_TFT / RANKED_TFT_TURBO 等 */
+  /** Current season ranked queue. */
   rankedLeagueQueue?: string
-  /** 当前赛季排位段位 */
+  /** Current season ranked tier. */
   rankedLeagueTier?: LolRankedTier
-  /** 当前赛季连败局数（字符串） */
+  /** Current season loss streak as string. */
   rankedLosses?: string
-  /** 上赛季子段位；大师及以上或 TFT 场景常见 NA */
+  /** Previous season ranked division. */
   rankedPrevSeasonDivision?: LolRankedDivision
-  /** 上赛季段位 */
+  /** Previous season tier. */
   rankedPrevSeasonTier?: LolRankedTier
-  /** 分赛段奖励等级 */
+  /** Split reward level. */
   rankedSplitRewardLevel?: string
-  /** 当前赛季连胜局数（字符串） */
+  /** Current season win streak as string. */
   rankedWins?: string
-  /** 纹章 JSON 字符串 */
+  /** Regalia JSON string. */
   regalia?: string
-  /** 皮肤变体 ID；TFT 通常为 "" */
+  /** Skin variant ID; TFT usually uses an empty string. */
   skinVariant?: string
-  /** 皮肤名（英文短名）；TFT 通常为 "" */
+  /** Skin name, usually an English short name; TFT usually empty. */
   skinname?: string
-  /** 观战 key（base64，进入观战用） */
+  /** Spectator key in base64, used to enter spectator mode. */
   spectatorKey?: string
-  /** 进入当前对局的时间戳（毫秒，字符串） */
+  /** Timestamp for entering current game, milliseconds as string. */
   timeStamp?: string
 }
 
-/** /lol-chat/v1/friends 返回的好友对象 */
+/** Friend object returned by /lol-chat/v1/friends. */
 export interface ChatFriend {
-  /** 好友 ID（聊天系统内部标识，格式 `{puuid}@pvp.net`） */
+  /** Friend ID, chat-system internal ID in `{puuid}@pvp.net` format. */
   id: string
-  /** 召唤师 ID */
+  /** Summoner ID. */
   summonerId: number
-  /** 玩家通用唯一标识 */
+  /** Player unique universal ID. */
   puuid: string
-  /** Riot ID 名称 */
+  /** Riot ID game name. */
   gameName: string
   /** Riot ID Tag */
   gameTag: string
-  /** 旧版召唤师名（现在基本为 ""） */
+  /** Legacy summoner name, usually empty now. */
   name: string
-  /** 头像 ID */
+  /** Icon ID. */
   icon: number
-  /** 在线状态 */
+  /** Availability. */
   availability: Availability
-  /** 当前所在产品: 'league_of_legends' / 'valorant' 等 */
+  /** Current product, such as 'league_of_legends' or 'valorant'. */
   product: string
-  /** 产品显示名（通常为 ""） */
+  /** Product display name, usually empty. */
   productName: string
-  /** 客户端分线（通常为 ""） */
+  /** Client patchline, usually empty. */
   patchline: string
-  /** 进程/会话 ID（XMPP 内部用） */
+  /** Process/session ID used internally by XMPP. */
   pid: string
-  /** 平台 ID：HN1 (国服) / EUW1 / NA1 等 */
+  /** Platform ID such as HN1, EUW1, NA1. */
   platformId: string
-  /** 显示分组 ID */
+  /** Display group ID. */
   displayGroupId: number
-  /** 显示分组名（默认分组是 "**Default"） */
+  /** Display group name. */
   displayGroupName: string
-  /** 真实分组 ID */
+  /** Real group ID. */
   groupId: number
-  /** 真实分组名 */
+  /** Real group name. */
   groupName: string
-  /** 备注 */
+  /** Note. */
   note: string
-  /** 个性签名 */
+  /** Status message. */
   statusMessage: string
-  /** 简介（通常为 ""） */
+  /** Summary, usually empty. */
   summary: string
-  /** 上次在线时间（未知时为 null；在线时为 0 或毫秒时间戳） */
+  /** Last online time; null when unknown, 0 or timestamp when online. */
   lastSeenOnlineTimestamp: string | number | null
-  /** XMPP 时间戳（毫秒） */
+  /** XMPP timestamp in milliseconds. */
   time: number
-  /** 是否屏蔽该好友的 P2P 语音 */
+  /** Whether P2P voice is muted for this friend. */
   isP2PConversationMuted: boolean
-  /** 与此玩家在 Riot 层的关系（friend / pending / blocked 等） */
+  /** Riot-level relationship with this player. */
   relationshipOnRiot: string
-  /** Discord 账户 ID（未绑定为 null） */
+  /** Discord account ID, null when unbound. */
   discordId: string | null
-  /** Discord 账户详情（未绑定为 null） */
+  /** Discord account details, null when unbound. */
   discordInfo: unknown | null
-  /** Discord 在线状态（未绑定为 null） */
+  /** Discord availability, null when unbound. */
   discordOnlineStatus: string | null
-  /** LOL 子状态（稀疏，字段全为字符串） */
+  /** Sparse LOL sub-state with string fields. */
   lol: LolSubStatus
 }
 
-/** POST /lol-spectator/v1/spectate/launch 的请求体 */
+/** Request body for POST /lol-spectator/v1/spectate/launch. */
 export interface SpectatorLaunchPayload {
   allowObserveMode: 'ALL' | 'FRIENDS' | 'NONE' | (string & {})
   dropInSpectateGameId: string
@@ -345,19 +343,19 @@ export interface SpectatorLaunchPayload {
   spectatorKey?: string
 }
 
-// ==================== 匹配相关 ====================
+// ==================== Matchmaking ====================
 
 
-/** 匹配搜索状态 */
+/** Matchmaking search state. */
 export type MatchSearchState = 'Invalid' | 'AbandonedLowPriorityQueue' | 'Canceled' | 'Searching' | 'Found' | 'Error'
 
-/** Dodge（逃跑）数据 */
+/** Dodge penalty data. */
 export interface DodgeData {
   dodgerId: number
   state: string
 }
 
-/** 低优先权惩罚数据 */
+/** Low-priority penalty data. */
 export interface LowPriorityData {
   bustedLeaverAccessToken: string
   penalizedSummonerIds: number[]
@@ -366,7 +364,7 @@ export interface LowPriorityData {
   reason: string
 }
 
-/** 匹配搜索状态详情 — GET /lol-matchmaking/v1/search */
+/** Matchmaking search details from GET /lol-matchmaking/v1/search. */
 export interface MatchSearchResult {
   dodgeData: DodgeData
   errors: unknown[]
@@ -380,7 +378,7 @@ export interface MatchSearchResult {
   timeInQueue: number
 }
 
-/** Ready Check（匹配准备确认）状态 — GET /lol-matchmaking/v1/ready-check */
+/** Ready Check state from GET /lol-matchmaking/v1/ready-check. */
 export interface ReadyCheck {
   declinerIds: number[]
   dodgeWarning: string
@@ -390,9 +388,9 @@ export interface ReadyCheck {
   timer: number
 }
 
-// ==================== 游戏流程相关 ====================
+// ==================== Gameflow ====================
 
-/** 游戏流程阶段 — GET /lol-gameflow/v1/gameflow-phase */
+/** Gameflow phase from GET /lol-gameflow/v1/gameflow-phase. */
 export type GameflowPhase =
   | 'None'
   | 'Lobby'
@@ -408,7 +406,7 @@ export type GameflowPhase =
   | 'WatchInProgress'
   | 'TerminatedInError'
 
-/** 游戏客户端连接信息 */
+/** Game client connection info. */
 export interface GameClient {
   running: boolean
   visible: boolean
@@ -418,7 +416,7 @@ export interface GameClient {
   observerServerPort: number
 }
 
-/** 游戏流程会话 — GET /lol-gameflow/v1/session */
+/** Gameflow session from GET /lol-gameflow/v1/session. */
 export interface GameflowSession {
   phase: GameflowPhase
   gameClient: GameClient
@@ -459,7 +457,7 @@ export interface GameflowSession {
   }
 }
 
-/** 游戏流程中的队伍玩家 */
+/** Team player in gameflow. */
 export interface GameflowTeamPlayer {
   championId: number
   puuid: string
@@ -468,23 +466,23 @@ export interface GameflowTeamPlayer {
   selectedPosition: string
   selectedRole: string
   summonerId: number
-  /** 注意：在 InProgress 阶段此字段始终为空字符串，需通过 getSummonerByPuuid 获取 displayName */
+  /** During InProgress this is always empty; call getSummonerByPuuid for displayName. */
   summonerInternalName: string
-  /** 注意：在 InProgress 阶段此字段始终为空字符串，需通过 getSummonerByPuuid 获取 displayName */
+  /** During InProgress this is always empty; call getSummonerByPuuid for displayName. */
   summonerName: string
   teamOwner: boolean
   teamParticipantId: number
   /**
-   * 名称可见性类型：
-   * - "HIDDEN" — 主播模式，身份信息被混淆
-   * - "PUBLIC" — 正常可见
+   * Name visibility type:
+   * - "HIDDEN": streamer mode with obfuscated identity
+   * - "PUBLIC": normal visibility
    */
   nameVisibilityType?: 'HIDDEN' | 'PUBLIC' | (string & {})
-  /** 混淆后的 PUUID，主播模式下替代 puuid 使用 */
+  /** Obfuscated PUUID used instead of puuid in streamer mode. */
   obfuscatedPuuid?: string
 }
 
-/** 玩家英雄选择信息 */
+/** Player champion selection info. */
 export interface PlayerChampionSelection {
   championId: number
   puuid: string
@@ -493,9 +491,9 @@ export interface PlayerChampionSelection {
   spell2Id: number
 }
 
-// ==================== 英雄选择相关 ====================
+// ==================== ChampSelect ====================
 
-/** 英雄选择会话 — GET /lol-champ-select/v1/session */
+/** Champ-select session from GET /lol-champ-select/v1/session. */
 export interface ChampSelectSession {
   actions: ChampSelectAction[][][]
   allowBattleBoost: boolean
@@ -552,20 +550,20 @@ export interface ChampSelectSession {
   }
 }
 
-/** 替补席英雄（ARAM 模式） */
+/** Bench champion for ARAM mode. */
 export interface BenchChampion {
   championId: number
   isPriority: boolean
 }
 
-/** 英雄交易状态 */
+/** Champion trade state. */
 export interface ChampSelectTrade {
   cellId: number
   id: number
   state: 'INVALID' | 'AVAILABLE' | 'BUSY' | 'RECEIVED' | 'SENT' | (string & {})
 }
 
-/** 英雄选择阶段单个召唤师状态 — GET /lol-champ-select/v1/summoners/{cellId} */
+/** Single summoner state during ChampSelect from GET /lol-champ-select/v1/summoners/{cellId}. */
 export interface ChampSelectSummoner {
   actingBackgroundAnimationState: string
   activeActionType: string
@@ -608,7 +606,7 @@ export interface ChampSelectSummoner {
   tradeId: number
 }
 
-/** 英雄选择操作 */
+/** Champ-select action. */
 export interface ChampSelectAction {
   actorCellId: number
   championId: number
@@ -619,76 +617,76 @@ export interface ChampSelectAction {
 }
 
 /**
- * 英雄选择中的玩家
+ * Player in ChampSelect.
  *
- * 主播模式（nameVisibilityType === 'HIDDEN'）下：
- *   - puuid 为空字符串 ""，使用 obfuscatedPuuid 替代
- *   - summonerId 为 0，使用 obfuscatedSummonerId 替代
- *   - gameName / tagLine / internalName / playerAlias 均为空字符串
+ * In streamer mode (nameVisibilityType === 'HIDDEN'):
+ *   - puuid is empty, use obfuscatedPuuid instead
+ *   - summonerId is 0, use obfuscatedSummonerId instead
+ *   - gameName / tagLine / internalName / playerAlias are empty
  */
 export interface ChampSelectPlayer {
-  /** 分配位置，如 "top"/"jungle"/"mid"/"bot"/"utility"，未分配时为 "" */
+  /** Assigned position such as top/jungle/mid/bot/utility, or empty when unassigned. */
   assignedPosition: string
-  /** 格子 ID（0-4 己方，5-9 对方） */
+  /** Cell ID, 0-4 allied side and 5-9 enemy side. */
   cellId: number
-  /** 已选定英雄 ID，未选时为 0 */
+  /** Selected champion ID, 0 when unselected. */
   championId: number
-  /** 意向选择英雄 ID，未选时为 0 */
+  /** Intended champion ID, 0 when unselected. */
   championPickIntent: number
-  /** Riot ID 名称，主播模式下为 "" */
+  /** Riot ID game name, empty in streamer mode. */
   gameName: string
-  /** 内部名称，主播模式下为 "" */
+  /** Internal name, empty in streamer mode. */
   internalName: string
-  /** 是否被自动补位 */
+  /** Whether the player is autofilled. */
   isAutofilled: boolean
-  /** 是否为人类玩家（人机为 false） */
+  /** Whether this is a human player. */
   isHumanoid: boolean
   /**
-   * 名称可见性类型：
-   * - "HIDDEN" — 主播模式，身份信息被混淆
-   * - "PUBLIC" — 正常可见
+   * Name visibility type:
+   * - "HIDDEN": streamer mode with obfuscated identity
+   * - "PUBLIC": normal visibility
    */
   nameVisibilityType: 'HIDDEN' | 'PUBLIC' | (string & {})
   /**
-   * 混淆后的 PUUID，主播模式下替代 puuid 使用
-   * 格式如 "d6b1c306-6893-02eb-22a2-199bfd58f170"
+   * Obfuscated PUUID used instead of puuid in streamer mode.
+   * Example format: "d6b1c306-6893-02eb-22a2-199bfd58f170"
    */
   obfuscatedPuuid: string
-  /** 混淆后的召唤师 ID，主播模式下替代 summonerId 使用 */
+  /** Obfuscated summoner ID used instead of summonerId in streamer mode. */
   obfuscatedSummonerId: number
-  /** 选择模式 */
+  /** Pick mode. */
   pickMode: number
-  /** 选择轮次 */
+  /** Pick turn. */
   pickTurn: number
-  /** 玩家别名，主播模式下为 "" */
+  /** Player alias, empty in streamer mode. */
   playerAlias: string
-  /** 玩家类型 */
+  /** Player type. */
   playerType: string
   /**
-   * 玩家 PUUID，主播模式下为空字符串 ""
-   * 主播模式下请使用 obfuscatedPuuid
+   * Player PUUID, empty in streamer mode.
+   * Use obfuscatedPuuid in streamer mode.
    */
   puuid: string
-  /** 选中的皮肤 ID，未选时为 0 */
+  /** Selected skin ID, 0 when unselected. */
   selectedSkinId: number
-  /** 召唤师技能1 ID */
+  /** Summoner spell 1 ID. */
   spell1Id: number
-  /** 召唤师技能2 ID */
+  /** Summoner spell 2 ID. */
   spell2Id: number
   /**
-   * 召唤师 ID，主播模式下为 0
-   * 主播模式下请使用 obfuscatedSummonerId
+   * Summoner ID, 0 in streamer mode.
+   * Use obfuscatedSummonerId in streamer mode.
    */
   summonerId: number
-  /** Riot ID Tag，主播模式下为 "" */
+  /** Riot ID tag, empty in streamer mode. */
   tagLine: string
-  /** 队伍：1 = 己方（蓝方），2 = 对方（红方） */
+  /** Team: 1 = allied side, 2 = enemy side. */
   team: 1 | 2 | number
-  /** 守卫皮肤 ID，未选择时为 -1 */
+  /** Ward skin ID, -1 when unselected. */
   wardSkinId: number
 }
 
-/** 选人阶段玩家详细信息（组合查询结果） */
+/** Detailed ChampSelect player info from combined queries. */
 export interface ChampSelectPlayerDetail {
   summonerId: number
   championId: number
@@ -702,33 +700,33 @@ export interface ChampSelectPlayerDetail {
   recentMatches: unknown
 }
 
-// ==================== 队列相关 ====================
+// ==================== Queues ====================
 
-/** 常用队列ID */
+/** Common queue IDs. */
 export enum QueueId {
-  /** 云顶之弈 (普通) */
+  /** TFT normal. */
   TFT_NORMAL = 1090,
-  /** 云顶之弈 (排位) */
+  /** TFT ranked. */
   TFT_RANKED = 1100,
-  /** 云顶之弈 (超级激斗) */
+  /** TFT hyper roll. */
   TFT_HYPER_ROLL = 1130,
-  /** 云顶之弈 (双人作战) */
+  /** TFT double up. */
   TFT_DOUBLE_UP = 1160,
-  /** 单/双排位 */
+  /** Ranked solo/duo. */
   RANKED_SOLO = 420,
-  /** 灵活排位 */
+  /** Ranked flex. */
   RANKED_FLEX = 440,
-  /** 匹配模式 */
+  /** Normal blind. */
   NORMAL_BLIND = 430,
-  /** 征召模式 */
+  /** Normal draft. */
   NORMAL_DRAFT = 400,
-  /** 极地大乱斗 */
+  /** ARAM. */
   ARAM = 450,
 }
 
-// ==================== 战绩相关 ====================
+// ==================== Match History ====================
 
-/** 战绩列表响应 — GET /lol-match-history/v1/products/lol/{puuid}/matches */
+/** Match-history list response from GET /lol-match-history/v1/products/lol/{puuid}/matches. */
 export interface MatchHistoryResponse {
   accountId: number
   games: {
@@ -742,7 +740,7 @@ export interface MatchHistoryResponse {
   platformId: string
 }
 
-/** 单场对局 */
+/** Match entry. */
 export interface MatchGame {
   endOfGameResult: string
   gameCreation: number
@@ -762,10 +760,10 @@ export interface MatchGame {
   teams: MatchTeam[]
 }
 
-/** 单局对局详情 — GET /lol-match-history/v1/games/{gameId} */
+/** Match details from GET /lol-match-history/v1/games/{gameId}. */
 export type MatchDetail = MatchGame
 
-/** 参与者时间线数据 */
+/** Participant timeline data. */
 export interface ParticipantTimeline {
   creepsPerMinDeltas: Record<string, number>
   csDiffPerMinDeltas: Record<string, number>
@@ -779,7 +777,7 @@ export interface ParticipantTimeline {
   xpPerMinDeltas: Record<string, number>
 }
 
-/** 对局队伍数据 */
+/** Match team data. */
 export interface MatchTeam {
   bans: unknown[]
   baronKills: number
@@ -799,7 +797,7 @@ export interface MatchTeam {
   win: string
 }
 
-/** 参与者身份 */
+/** Participant identity. */
 export interface ParticipantIdentity {
   participantId: number
   player: {
@@ -817,7 +815,7 @@ export interface ParticipantIdentity {
   }
 }
 
-/** 参与者数据 */
+/** Participant data. */
 export interface Participant {
   championId: number
   highestAchievedSeasonTier: string
@@ -829,7 +827,7 @@ export interface Participant {
   timeline: ParticipantTimeline
 }
 
-/** 参与者统计数据 */
+/** Participant stats. */
 export interface ParticipantStats {
   assists: number
   causedEarlySurrender: boolean
@@ -948,9 +946,9 @@ export interface ParticipantStats {
   win: boolean
 }
 
-// ==================== 队列相关（详细） ====================
+// ==================== Queue Details ====================
 
-/** 队列游戏类型配置 */
+/** Queue game-type config. */
 export interface GameTypeConfig {
   advancedLearningQuests: boolean
   allowTrades: boolean
@@ -976,7 +974,7 @@ export interface GameTypeConfig {
   teamChampionPool: boolean
 }
 
-/** 队列奖励配置 */
+/** Queue reward config. */
 export interface QueueRewards {
   isChampionPointsEnabled: boolean
   isIpEnabled: boolean
@@ -984,7 +982,7 @@ export interface QueueRewards {
   partySizeIpRewards: unknown[]
 }
 
-/** 队列数据 — GET /lol-game-queues/v1/queues */
+/** Queue data from GET /lol-game-queues/v1/queues. */
 export interface GameQueue {
   allowablePremadeSizes: number[]
   areFreeChampionsAllowed: boolean
@@ -1031,9 +1029,9 @@ export interface GameQueue {
   type: string
 }
 
-// ==================== 游戏资源相关 ====================
+// ==================== Game Assets ====================
 
-/** 召唤师技能数据 — GET /lol-game-data/assets/v1/summoner-spells.json */
+/** Summoner spell data from GET /lol-game-data/assets/v1/summoner-spells.json. */
 export interface SummonerSpellData {
   id: number
   name: string
@@ -1044,50 +1042,50 @@ export interface SummonerSpellData {
   iconPath: string
 }
 
-/** 英雄摘要数据 — GET /lol-game-data/assets/v1/champion-summary.json */
+/** Champion summary data from GET /lol-game-data/assets/v1/champion-summary.json. */
 export interface ChampionSummaryData {
   id: number
-  /** 英雄称号，如 "黑暗之女" */
+  /** Champion title. */
   name: string
-  /** 英文名，如 "Annie" */
+  /** English alias such as "Annie". */
   alias: string
-  /** 英雄名字，如 "安妮" */
+  /** Champion display name. */
   description: string
   contentId: string
   roles: string[]
   squarePortraitPath: string
 }
 
-// ==================== WebSocket 事件相关 ====================
+// ==================== WebSocket Events ====================
 
-/** LCU WebSocket 事件消息 */
+/** LCU WebSocket event message. */
 export interface LCUEventMessage {
   uri: string
   eventType: 'Create' | 'Update' | 'Delete'
   data: unknown
 }
 
-/** 常用 LCU 事件 URI */
+/** Common LCU event URIs. */
 export enum LcuEventUri {
-  /** 匹配准备就绪（接受/拒绝） */
+  /** Ready Check accept/decline. */
   READY_CHECK = '/lol-matchmaking/v1/ready-check',
-  /** 游戏流程阶段 */
+  /** Gameflow session. */
   GAMEFLOW_PHASE = '/lol-gameflow/v1/session',
-  /** 英雄选择阶段 */
+  /** ChampSelect session. */
   CHAMP_SELECT = '/lol-champ-select/v1/session',
-  /** TFT 战斗通行证更新（可用于检测对局结束） */
+  /** TFT battle pass update, usable for detecting game end. */
   TFT_BATTLE_PASS = '/lol-tft-pass/v1/battle-pass',
-  /** 游戏流程阶段变化（仅 phase 字符串） */
+  /** Gameflow phase change, phase string only. */
   GAMEFLOW_PHASE_CHANGE = '/lol-gameflow/v1/gameflow-phase',
-  /** 大厅/房间状态 */
+  /** Lobby state. */
   LOBBY = '/lol-lobby/v2/lobby',
-  /** 当前玩家的聊天状态（availability / statusMessage 等） */
+  /** Current player's chat state, including availability / statusMessage. */
   CHAT_ME = '/lol-chat/v1/me',
 }
 
-// ==================== 聊天相关 ====================
+// ==================== Chat ====================
 
-/** 聊天对话 — GET /lol-chat/v1/conversations */
+/** Chat conversation from GET /lol-chat/v1/conversations. */
 export interface ChatConversation {
   gameName: string
   gameTag: string
@@ -1104,7 +1102,7 @@ export interface ChatConversation {
   unreadMessageCount: number
 }
 
-/** 聊天消息 — GET/POST /lol-chat/v1/conversations/{id}/messages */
+/** Chat message from GET/POST /lol-chat/v1/conversations/{id}/messages. */
 export interface ChatMessage {
   body: string
   fromId: string
@@ -1117,53 +1115,53 @@ export interface ChatMessage {
   type: 'chat' | 'celebration' | 'system' | (string & {})
 }
 
-/** 发送聊天消息的请求体 */
+/** Request body for sending a chat message. */
 export interface SendChatMessageBody {
   body: string
   type?: 'chat' | 'celebration' | (string & {})
 }
 
-/** 玩家在线状态 */
+/** Player availability. */
 export type Availability = 'chat' | 'away' | 'dnd' | 'offline' | 'mobile' | (string & {})
 
-/** 当前用户聊天状态 — GET /lol-chat/v1/me */
+/** Current user chat state from GET /lol-chat/v1/me. */
 export interface ChatMe {
-  /** 在线状态：chat / away / dnd / offline / mobile */
+  /** Availability: chat / away / dnd / offline / mobile. */
   availability: Availability
-  /** Riot ID 名称 */
+  /** Riot ID game name. */
   gameName: string
-  /** Riot ID Tag（如 "77772"） */
+  /** Riot ID tag. */
   gameTag: string
-  /** 头像 ID */
+  /** Icon ID. */
   icon: number
-  /** 聊天系统内部标识，格式 `{puuid}@pvp.net` */
+  /** Chat-system internal ID in `{puuid}@pvp.net` format. */
   id: string
-  /** LOL 子状态（稀疏，字段全是字符串） */
+  /** Sparse LOL sub-state with string fields. */
   lol: LolSubStatus
-  /** 旧版召唤师名（现在通常为 ""） */
+  /** Legacy summoner name, usually empty. */
   name: string
-  /** 混淆后的召唤师 ID（0 表示未提供） */
+  /** Obfuscated summoner ID; 0 means unavailable. */
   obfuscatedSummonerId: number
-  /** 客户端分线（通常为 ""） */
+  /** Client patchline, usually empty. */
   patchline: string
-  /** 进程/会话 ID（格式同 id） */
+  /** Process/session ID, same format as id. */
   pid: string
-  /** 平台 ID：HN1 (国服) / EUW1 / NA1 等 */
+  /** Platform ID such as HN1, EUW1, NA1. */
   platformId: string
-  /** 产品：league_of_legends / valorant 等 */
+  /** Product such as league_of_legends or valorant. */
   product: string
-  /** 产品显示名（通常为 ""） */
+  /** Product display name, usually empty. */
   productName: string
-  /** 玩家 PUUID */
+  /** Player PUUID. */
   puuid: string
-  /** 个性签名。**注意可能为 null**（从未设置过签名 / XMPP 未就绪等） */
+  /** Status message. May be null when never set or XMPP is not ready. */
   statusMessage: string | null
-  /** 简介（通常为 ""） */
+  /** Summary, usually empty. */
   summary: string
-  /** 召唤师 ID */
+  /** Summoner ID. */
   summonerId: number
-  /** XMPP 时间戳（毫秒；0 表示未提供） */
+  /** XMPP timestamp in milliseconds; 0 means unavailable. */
   time: number
-  /** 上次在线时间（通常为 null） */
+  /** Last online time, usually null. */
   lastSeenOnlineTimestamp?: string | number | null
 }

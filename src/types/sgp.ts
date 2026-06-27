@@ -1,14 +1,15 @@
 /**
- * SGP (Service Gateway Proxy) 类型声明
+ * SGP (Service Gateway Proxy) type declarations.
  *
- * SGP 是 Riot 的外部战绩/召唤师/排位查询 API，
- * 相比 LCU 内部接口，SGP 支持跨区查询、按队列 tag 过滤、突破 100 场上限等。
+ * SGP is Riot's external match-history / summoner / ranked query API.
+ * Compared with LCU APIs, it supports cross-region queries, queue tag filtering,
+ * and bypasses the 100-game LCU cap.
  *
- * 类型定义参考自 LeagueAkari 项目 (https://github.com/LeagueAkari/LeagueAkari)
- * 的 src/shared/data-sources/sgp/types.ts，根据实际返回数据补充了部分字段。
+ * Type definitions reference LeagueAkari's src/shared/data-sources/sgp/types.ts
+ * and add fields observed from real responses.
  */
 
-// ==================== 战绩列表 ====================
+// ==================== Match History List ====================
 
 export interface SgpMatchHistoryLol {
   games: SgpGameSummaryLol[]
@@ -37,7 +38,7 @@ export interface SgpGameSummaryJsonLol {
   gameEndTimestamp: number
   gameId: number
   gameMode: string
-  /** 模式变体，如 ARAM 的 "mapskin_ha_bilgewater" */
+  /** Mode variant, such as ARAM "mapskin_ha_bilgewater". */
   gameModeMutators: string[]
   gameName: string
   gameStartTimestamp: number
@@ -52,7 +53,7 @@ export interface SgpGameSummaryJsonLol {
   tournamentCode: string
 }
 
-// ==================== 队伍 ====================
+// ==================== Teams ====================
 
 export interface SgpTeam {
   bans: SgpBan[]
@@ -81,14 +82,14 @@ export interface SgpObjectiveStat {
   kills: number
 }
 
-// ==================== 参与者 ====================
+// ==================== Participants ====================
 
 export interface SgpParticipantLol {
-  /** 行为标记（如英雄是否在战斗中） */
+  /** Behavior flags such as whether the champion is in combat. */
   PlayerBehavior: {
     PlayerBehavior_IsHeroInCombat: number
   }
-  /** 评分字段 0-11，游戏内置计分板数据 */
+  /** Score fields 0-11 from the in-game scoreboard. */
   PlayerScore0: number
   PlayerScore1: number
   PlayerScore2: number
@@ -160,7 +161,7 @@ export interface SgpParticipantLol {
   magicDamageDealt: number
   magicDamageDealtToChampions: number
   magicDamageTaken: number
-  /** 任务进度数据，键名不固定，随活动/版本变化 */
+  /** Mission progress data with keys that vary by event/version. */
   missions: Record<string, number>
   needVisionPings: number
   neutralMinionsKilled: number
@@ -239,7 +240,7 @@ export interface SgpParticipantLol {
   win: boolean
 }
 
-// ==================== 符文 ====================
+// ==================== Runes ====================
 
 export interface SgpPerks {
   statPerks: SgpStatPerks
@@ -265,12 +266,12 @@ export interface SgpStatPerks {
   offense: number
 }
 
-// ==================== 挑战数据 ====================
+// ==================== Challenges ====================
 
 /**
- * challenges 字段包含大量游戏内挑战/成就统计。
- * 键名随版本和活动变化，因此用 Record 表示核心数值字段，
- * 同时列出已知的常用字段以便 IDE 提示。
+ * The challenges field contains many in-game challenge / achievement stats.
+ * Keys vary by version and event, so Record covers the dynamic core fields while
+ * known common fields are listed for IDE hints.
  */
 export interface SgpChallenges extends Record<string, number | number[]> {
   abilityUses: number
@@ -304,33 +305,32 @@ export interface SgpChallenges extends Record<string, number | number[]> {
 // ==================== Entitlements Token ====================
 
 export interface SgpEntitlementsToken {
-  /** JWT access token，用于 Authorization: Bearer {accessToken} 请求 SGP 战绩接口 */
+  /** JWT access token used as Authorization: Bearer {accessToken} for SGP match APIs. */
   accessToken: string
-  /** Entitlements JWT（格式不同，部分 SGP 接口可能需要） */
+  /** Entitlements JWT, a different format used by some SGP APIs. */
   token: string
-  /** 权限列表（通常为空数组） */
+  /** Entitlement list, usually empty. */
   entitlements: unknown[]
   /**
-   * 签发者 URL，如 `http://hn1-k8s-bcs-internal.lol.qq.com:28088`
-   * 可从中解析当前区服（hn1 = 艾欧尼亚、hn10 = 黑色玫瑰 等）
+   * Issuer URL, e.g. `http://hn1-k8s-bcs-internal.lol.qq.com:28088`.
+   * Current server can be inferred from it.
    */
   issuer: string
-  /** 玩家 PUUID */
+  /** Player PUUID. */
   subject: string
 }
 
-// ==================== SGP 服务器配置 ====================
+// ==================== SGP Server Config ====================
 
 /**
- * SGP 服务器地址映射
+ * SGP server URL mapping.
  *
- * 数据来源：LeagueAkari 项目 (https://github.com/LeagueAkari/LeagueAkari)
- * 文件路径：resources/builtin-config/sgp/league-servers.json
+ * Data source: LeagueAkari project, resources/builtin-config/sgp/league-servers.json.
  *
- * 国服所有大区共享同一个 JWT Token，可跨区查询战绩（tencentServerMatchHistoryInteroperability）
+ * Tencent servers share one JWT token and support cross-server match-history queries.
  */
 export const SGP_SERVERS: Record<string, { matchHistory: string | null; common: string | null }> = {
-  // ===== 国服 (Tencent) =====
+  // ===== Tencent =====
   TENCENT_HN1:   { matchHistory: 'https://hn1-k8s-sgp.lol.qq.com:21019',   common: 'https://hn1-k8s-sgp.lol.qq.com:21019' },
   TENCENT_HN10:  { matchHistory: 'https://hn10-k8s-sgp.lol.qq.com:21019',  common: 'https://hn10-k8s-sgp.lol.qq.com:21019' },
   TENCENT_TJ100: { matchHistory: 'https://tj100-sgp.lol.qq.com:21019',     common: 'https://tj100-sgp.lol.qq.com:21019' },
@@ -342,7 +342,7 @@ export const SGP_SERVERS: Record<string, { matchHistory: string | null; common: 
   TENCENT_PBE:   { matchHistory: 'https://pbe-sgp.lol.qq.com:21019',       common: 'https://pbe-sgp.lol.qq.com:21019' },
   TENCENT_PREPBE:{ matchHistory: 'https://prepbe-sgp.lol.qq.com:21019',    common: 'https://prepbe-sgp.lol.qq.com:21019' },
 
-  // ===== 外服 =====
+  // ===== Non-Tencent =====
   TW2:  { matchHistory: 'https://apse1-red.pp.sgp.pvp.net',  common: 'https://tw2-red.lol.sgp.pvp.net' },
   SG2:  { matchHistory: 'https://apse1-red.pp.sgp.pvp.net',  common: 'https://sg2-red.lol.sgp.pvp.net' },
   PH2:  { matchHistory: 'https://apse1-red.pp.sgp.pvp.net',  common: 'https://ph2-red.lol.sgp.pvp.net' },
@@ -356,12 +356,19 @@ export const SGP_SERVERS: Record<string, { matchHistory: string | null; common: 
   LA2:  { matchHistory: 'https://usw2-red.pp.sgp.pvp.net',   common: 'https://las-red.lol.sgp.pvp.net' },
   OC1:  { matchHistory: 'https://apse1-red.pp.sgp.pvp.net',  common: 'https://oce-red.lol.sgp.pvp.net' },
   EUW:  { matchHistory: 'https://euc1-red.pp.sgp.pvp.net',   common: 'https://euw-red.lol.sgp.pvp.net' },
+  EUN1: { matchHistory: 'https://euc1-red.pp.sgp.pvp.net',   common: 'https://eun1-red.lol.sgp.pvp.net' },
   TR1:  { matchHistory: 'https://euc1-red.pp.sgp.pvp.net',   common: 'https://tr-red.lol.sgp.pvp.net' },
   RU:   { matchHistory: 'https://euc1-red.pp.sgp.pvp.net',   common: 'https://ru-red.lol.sgp.pvp.net' },
   PBE:  { matchHistory: 'https://usw2-red.pp.sgp.pvp.net',   common: 'https://pbe-red.lol.sgp.pvp.net' },
+
+  // Issuer fallback can resolve only to a regional PP cluster. Keep match-history capability.
+  EUC1:  { matchHistory: 'https://euc1-red.pp.sgp.pvp.net',   common: null },
+  USW2:  { matchHistory: 'https://usw2-red.pp.sgp.pvp.net',   common: null },
+  APSE1: { matchHistory: 'https://apse1-red.pp.sgp.pvp.net',  common: null },
+  APNE1: { matchHistory: 'https://apne1-red.pp.sgp.pvp.net',  common: null },
 }
 
-/** 国服大区互通列表 —— 同一个 JWT Token 可查询以下所有大区的战绩 */
+/** Tencent server interoperability list; one JWT token can query all listed servers. */
 export const TENCENT_MATCH_HISTORY_INTEROP = [
   'TENCENT_HN1',
   'TENCENT_HN10',
@@ -375,18 +382,18 @@ export const TENCENT_MATCH_HISTORY_INTEROP = [
   'TENCENT_PREPBE',
 ] as const
 
-// ==================== SGP Tag 过滤 ====================
+// ==================== SGP Tag Filtering ====================
 
 /**
- * 将 queueId 转换为 SGP tag
+ * Convert queueId to SGP tag.
  *
- * 直接拼 `q_` 前缀，不做白名单校验。
+ * Prefix with `q_` directly without whitelist validation.
  */
 export function queueIdToTag(queueId: number): string {
   return queueId > 0 ? `q_${queueId}` : ''
 }
 
-/** 国服大区中文名映射 */
+/** Tencent server localized name map. */
 export const TENCENT_SERVER_NAMES: Record<string, string> = {
   TENCENT_HN1: '艾欧尼亚',
   TENCENT_HN10: '黑色玫瑰',
