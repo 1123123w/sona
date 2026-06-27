@@ -100,6 +100,8 @@ export function SettingsPage() {
   const { language, setLanguage, t } = useI18n()
   const [hotkey, setHotkey] = useState(store.get('hotkey'))
   const [hideTFT, setHideTFT] = useState(store.get('hideTFT'))
+  const [gameModeFilter, setGameModeFilter] = useState(store.get('gameModeFilter'))
+  const [hideTFTPlayCard, setHideTFTPlayCard] = useState(store.get('hideTFTPlayCard'))
   const [hideSummonerRiftModes, setHideSummonerRiftModes] = useState(store.get('hideSummonerRiftModes'))
   const [hideAramMode, setHideAramMode] = useState(store.get('hideAramMode'))
   const [hideArenaMode, setHideArenaMode] = useState(store.get('hideArenaMode'))
@@ -111,6 +113,8 @@ export function SettingsPage() {
     const unsubs = [
       store.onChange('hotkey', setHotkey),
       store.onChange('hideTFT', setHideTFT),
+      store.onChange('gameModeFilter', setGameModeFilter),
+      store.onChange('hideTFTPlayCard', setHideTFTPlayCard),
       store.onChange('hideSummonerRiftModes', setHideSummonerRiftModes),
       store.onChange('hideAramMode', setHideAramMode),
       store.onChange('hideArenaMode', setHideArenaMode),
@@ -155,6 +159,24 @@ export function SettingsPage() {
           <SonaSwitch
             checked={hideTFT}
             onChange={(v) => { setHideTFT(v); store.set('hideTFT', v) }}
+          />
+        </SettingCard>
+        <SettingCard
+          title={t('settings.gameModeFilter.title')}
+          description={t('settings.gameModeFilter.desc')}
+        >
+          <SonaSwitch
+            checked={gameModeFilter}
+            onChange={(v) => { setGameModeFilter(v); store.set('gameModeFilter', v) }}
+          />
+        </SettingCard>
+        <SettingCard
+          title={t('settings.hideTFTPlayCard.title')}
+          description={t('settings.hideTFTPlayCard.desc')}
+        >
+          <SonaSwitch
+            checked={hideTFTPlayCard}
+            onChange={(v) => { setHideTFTPlayCard(v); store.set('hideTFTPlayCard', v) }}
           />
         </SettingCard>
         <SettingCard

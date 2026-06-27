@@ -1,12 +1,12 @@
 /**
- * 注入点注册中心
+ * Injection registry.
  *
- * 所有需要注入到 League Client DOM 中的元素都在这里定义。
- * 每个注入点是一个 tryInjectXxx 函数，通过 InjectorManager 统一调度。
+ * All League Client DOM injection points are defined here.
+ * Each injection point is a tryInjectXxx function scheduled by InjectorManager.
  *
- * 新增注入点只需：
- * 1. 写一个 tryInjectXxx(): boolean 函数
- * 2. 在 registerAllInjections() 中 injector.register(tryInjectXxx)
+ * To add a new injection point:
+ * 1. Write a tryInjectXxx(): boolean function.
+ * 2. Register it in registerAllInjections().
  */
 
 import { logger } from '@/index'
@@ -20,17 +20,38 @@ import { sleep } from '@/lib/utils'
 import { getPuuid } from '@/lib/assets'
 import { getUpdateState, onUpdateStateChange } from '@/lib/update-checker'
 
-/** 通用标记：标识已被 Sona 接管的 DOM 元素，防止重复绑定 */
+/** Shared marker for DOM elements already handled by Sona. */
 const HIJACKED_ATTR = 'data-sonaenhance-hijacked'
 
-function hideOfficialEntries(selectors: string[], attr: string): boolean {
+function hideOfficialEntries(selectors: readonly string[], attr: string): boolean {
   let matched = false
   selectors.forEach((selector) => {
     document.querySelectorAll(`${selector}:not([${attr}])`).forEach((el) => {
+      if (document.getElementById('sonaenhance-root')?.contains(el)) return
       matched = true
       el.setAttribute(attr, 'true')
       ;(el as HTMLElement).style.display = 'none'
     })
+  })
+  return matched
+}
+
+function hideOfficialEntriesByText(labels: string[], attr: string): boolean {
+  let matched = false
+  document.querySelectorAll('body *:not(script):not(style)').forEach((el) => {
+    if (document.getElementById('sonaenhance-root')?.contains(el)) return
+    if (el.hasAttribute(attr)) return
+
+    const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim()
+    if (!labels.some((label) => text === label || text.includes(label))) return
+
+    const target = el.closest('[data-game-mode], .parties-game-mode-card, .game-mode-card, lol-uikit-card, button, li, a') as HTMLElement | null
+    if (!target || document.getElementById('sonaenhance-root')?.contains(target)) return
+    if (target.hasAttribute(attr)) return
+
+    target.setAttribute(attr, 'true')
+    target.style.display = 'none'
+    matched = true
   })
   return matched
 }
@@ -42,12 +63,34 @@ function restoreOfficialEntries(attr: string) {
   })
 }
 
-// ==================== Sona 入口按钮 ====================
+function upsertStyleNode(id: string, css: string) {
+  let style = document.getElementById(id) as HTMLStyleElement | null
+  if (!style) {
+    style = document.createElement('style')
+    style.id = id
+    document.head.appendChild(style)
+  }
+  style.textContent = css
+}
+
+function removeStyleNode(id: string) {
+  document.getElementById(id)?.remove()
+}
+
+function countSelector(selector: string): number {
+  return document.querySelectorAll(selector).length
+}
+
+function countSelectors(selectors: readonly string[]): number {
+  return selectors.reduce((total, selector) => total + countSelector(selector), 0)
+}
+
+// ==================== Sona Entry Button ====================
 
 const BUTTON_ID = 'sonaenhance-entry-btn'
 
 /**
- * 创建 Sona 入口按钮 DOM 元素
+ * Create the Sona entry button DOM element.
  */
 function createEntryButton(): HTMLElement {
   const btn = document.createElement('div')
@@ -59,7 +102,7 @@ function createEntryButton(): HTMLElement {
     <span class="sonaenhance-entry-update-badge" aria-hidden="true">!</span>
   `
 
-  // 防止客户端底层的 mousedown/mouseup 事件穿透
+  // Prevent underlying client mousedown/mouseup handlers from leaking through.
   btn.addEventListener('mousedown', (e) => e.stopPropagation())
   btn.addEventListener('mouseup', (e) => e.stopPropagation())
 
@@ -69,7 +112,7 @@ function createEntryButton(): HTMLElement {
     logger.info('Modal opened')
   })
 
-  // 模态窗口关闭时同步 active 状态
+  // Sync active state when the modal closes.
   onModalVisibilityChange((visible) => {
     btn.classList.toggle('sonaenhance-entry-btn--active', visible)
   })
@@ -84,8 +127,8 @@ function createEntryButton(): HTMLElement {
 }
 
 /**
- * 注入任务：Sona 入口按钮
- * 在 Play 按钮左侧注入，支持自愈（被刷掉后自动补回）
+ * Injection task: Sona entry button.
+ * Injects to the left of the Play button and restores itself after rerenders.
  */
 function tryInjectSonaButton(): boolean {
   if (document.getElementById(BUTTON_ID)?.isConnected) return true
@@ -101,7 +144,7 @@ function tryInjectSonaButton(): boolean {
 }
 
 
-// ==================== 接管在线状态切换按钮 ====================
+// ==================== Availability Button Hijack ====================
 
 
 
@@ -111,20 +154,20 @@ const MENU_ID = 'sonaenhance-availability-menu'
 const AVAILABILITY_OPTIONS: { value: Availability; label: string }[] = [
   { value: 'chat', label: '在线' },
   { value: 'away', label: '离开' },
-  //{ value: 'dnd', label: '勿扰' }, 勿扰跟离开看起来是一样的，留一个就行了
+  //{ value: 'dnd', label: 'dnd' }, dnd looks the same as away, so keep one option.
   { value: 'offline', label: '隐身' },
   { value: 'mobile', label: '手机在线' },
 ]
 
-/** 当前状态缓存（从 store 初始化） */
+/** Current availability cache, initialized from store. */
 let currentAvailability: Availability = store.get('availability') as Availability
 
-/** 获取当前账号保存的签名 */
+/** Get the saved status message for the current account. */
 function getSavedStatus(): string {
   return store.get('statusMessage')[getPuuid()] ?? ''
 }
 
-/** 保存当前账号的签名 */
+/** Save the status message for the current account. */
 function setSavedStatus(msg: string) {
   const map = { ...store.get('statusMessage') }
   if (msg) {
@@ -136,22 +179,21 @@ function setSavedStatus(msg: string) {
 }
 
 /**
- * 启动时恢复持久化的在线状态和签名
+ * Restore persisted availability and status message at startup.
  *
- * 【重要防御】只在"游戏流程空闲"阶段（None / Lobby）才恢复，否则会和拳头底层状态机打架：
- *   - 玩家在 ChampSelect / InProgress / EndOfGame 等阶段时，客户端 C++ 层会接管
- *     lol 对象（写入"选人中/游戏中"），这时如果我们强行 PUT availability=chat，
- *     XMPP payload 会变成"绿色圆点 + 游戏中文字"的缝合怪状态，可能麦克风自动断开
- *     也和这个有关？
+ * Important guard: restore only while the gameflow is idle (None / Lobby), otherwise it can
+ * conflict with the Riot state machine. During ChampSelect / InProgress / EndOfGame, the
+ * client owns the lol presence payload and writes game-state text into it. Forcing
+ * availability=chat there can create mixed states.
  *
- * 另外：LCU 启动初期聊天服务器（XMPP）尚未连接完成，getChatMe 可能返回假 offline。
- * 所以恢复操作只做一次，不做周期性校正。
+ * Also, early during LCU startup the XMPP server may not be connected yet, and getChatMe
+ * can report a temporary offline state. Restore once and avoid periodic correction.
  */
 async function restoreAvailabilityAndStatus() {
   try {
     logger.info('[Availability] 开始恢复持久化状态...')
 
-    // 这里如果是游戏中或者其他在玩的状态，就直接放行，不改，不然怕关麦克风的bug。
+    // If already in or near a game, leave the client state untouched.
     const phase = await lcu.getGameflowPhase()
     if (phase !== 'None' && phase !== 'Lobby') {
       logger.info('[Availability] 当前阶段 %s，跳过状态恢复（避免与底层状态机冲突）', phase)
@@ -168,7 +210,7 @@ async function restoreAvailabilityAndStatus() {
       savedAvailability, JSON.stringify(savedStatus),
     )
 
-    // 2. 恢复在线状态（不恢复 away，它是客户端自动设置的，不应作为启动默认值）
+    // 2. Restore availability. Do not restore away because the client sets it automatically.
     if (savedAvailability && savedAvailability !== 'away' && savedAvailability !== me.availability) {
       try {
         await lcu.setAvailability(savedAvailability)
@@ -182,10 +224,10 @@ async function restoreAvailabilityAndStatus() {
       currentAvailability = me.availability
     }
 
-    // 3. 签名处理（同一策略：一次性写入，不校验）
-    //    - 客户端无签名（null / 非字符串 / 空字符串） + store 有有效签名 → 写入
-    //    - 客户端有有效签名 → 同步到 store
-    //    - 非字符串 / 空字符串 一律不写入 store，避免空值污染
+    // 3. Status message handling with the same one-shot strategy.
+    //    - client has no message and store has a valid one: write it
+    //    - client has a valid message: sync it to store
+    //    - invalid or empty values never write to store, avoiding empty-value pollution
     const clientStatus = hasContent(me.statusMessage) ? (me.statusMessage as string) : ''
     if (clientStatus === '' && hasContent(savedStatus)) {
       try {
@@ -210,23 +252,23 @@ async function restoreAvailabilityAndStatus() {
 }
 
 /**
- * 订阅 WS 后的**延迟校验**。
+ * Delayed verification after subscribing to WS.
  *
- * 背景：
- *   完整重启客户端时，存在一个时间窗口：
- *     T0: Sona restore 写入签名 → 客户端 PUT 返回成功
- *     T1: 我们的 WS 监听挂上
- *     T2: 客户端自己晚到的 XMPP 初始化完成，给 chat/me 推了"干净的初始状态"→ 签名被清空
- *   T2 这条推送理论上 WS 能抓到，但客户端可能用本地"同步"而非事件路径，导致我们 listener
- *   根本没被触发——表现就是"写入成功日志打了，但客户端显示还是空"。
+ * Background:
+ *   On a full client restart, there is a timing window:
+ *     T0: Sona restore writes the status message and the client PUT succeeds.
+ *     T1: Our WS listener is attached.
+ *     T2: The client's delayed XMPP initialization pushes a clean chat/me state and clears it.
+ *   T2 should be observable through WS, but the client can use local sync paths instead of
+ *   event delivery, so the listener may never fire.
  *
- * 解决：
- *   挂上 WS 后等一段时间（让客户端完成所有启动态同步），再重新拉 /lol-chat/v1/me 核对一次：
- *     - 如果和 store 还不一致 → 再写一次（此时客户端已经稳定，写入一定生效）
- *     - 如果一致 → restore 是真成功了，什么都不做
+ * Solution:
+ *   After attaching WS, wait for startup presence sync to settle, then fetch /lol-chat/v1/me:
+ *     - if it still differs from store, write once more
+ *     - if it matches, restore succeeded and no action is needed
  */
 async function verifyAfterSubscribe() {
-  // 给客户端足够时间完成启动期所有 presence 同步，实测两秒左右比较合适
+  // Give the client enough time to finish startup presence sync.
   await sleep(2000)
 
   try {
@@ -248,7 +290,7 @@ async function verifyAfterSubscribe() {
       savedAvailability, JSON.stringify(savedStatus),
     )
 
-    // 校验 availability
+    // Verify availability.
     if (savedAvailability && savedAvailability !== me.availability) {
       logger.warn('[Availability] 延迟校验发现 availability 被客户端回退，再次写入: %s', savedAvailability)
       await lcu.setAvailability(savedAvailability).catch((err) => {
@@ -256,7 +298,7 @@ async function verifyAfterSubscribe() {
       })
     }
 
-    // 校验 statusMessage
+    // Verify statusMessage.
     if (hasContent(savedStatus) && clientStatus !== savedStatus) {
       logger.warn('[Availability] 延迟校验发现 statusMessage 被客户端回退（"%s" → "%s"），再次写入', savedStatus, clientStatus)
       await lcu.setStatusMessage(savedStatus).catch((err) => {
@@ -268,21 +310,20 @@ async function verifyAfterSubscribe() {
   }
 }
 
-/** 判定一个值是否算"有效签名内容"：必须是非空字符串 */
+/** Check whether a value is valid status message content. */
 function hasContent(v: unknown): v is string {
   return typeof v === 'string' && v.length > 0
 }
 
 /**
- * 订阅 /lol-chat/v1/me 的实时变化，把客户端 availability/statusMessage 同步到 store。
+ * Subscribe to /lol-chat/v1/me changes and sync client availability/statusMessage to store.
  *
- * 解决的场景：
- *   玩家在**客户端原生签名输入框**里修改签名（由 unlockStatus 解锁）→ 客户端 PUT /lol-chat/v1/me
- *   → 我们之前只在启动时拉一次快照，玩家改完签名后若没重启 Sona，store 永远不会更新。
+ * Solves the case where the user edits the status message in the native client input.
+ * Without this listener, store would not update until Sona restarts.
  *
- * 同步策略：
- *   - 和 restoreAvailabilityAndStatus 一样，仅在 None/Lobby 阶段同步，避免捕获"选人中/游戏中XX"等自动签名
- *   - availability 的写入已经在菜单点击逻辑里做了，这里只负责"客户端自发变化"的单向同步
+ * Sync strategy:
+ *   - like restoreAvailabilityAndStatus, sync only in None/Lobby to avoid automatic game-state messages
+ *   - availability writes already happen through menu clicks, so this handles client-originated changes
  */
 let chatMeUnsub: (() => void) | null = null
 
@@ -293,17 +334,17 @@ function subscribeChatMeSync() {
     const me = event.data as ChatMe | null
     if (!me) return
 
-    // 仅空闲阶段同步，避免把"选人中XX"之类的自动签名误存进去
+    // Sync only in idle phases to avoid storing automatic game-state messages.
     try {
       const phase = await lcu.getGameflowPhase()
       if (phase !== 'None' && phase !== 'Lobby') return
     } catch {
-      // 拉不到 phase 保守不同步
+      // If phase cannot be fetched, skip syncing conservatively.
       return
     }
 
-    // 同步签名：只有"有效字符串"（非空、非 null、非其他类型）才写 store，
-    // 避免客户端偶尔推送 null/undefined/'' 时覆盖掉已有的有效签名
+    // Sync statusMessage only when it is a valid non-empty string,
+    // avoiding null/undefined/empty payloads overwriting a valid saved message.
     if (hasContent(me.statusMessage)) {
       const savedStatus = getSavedStatus()
       if (me.statusMessage !== savedStatus) {
@@ -312,10 +353,8 @@ function subscribeChatMeSync() {
       }
     }
 
-    // 同步在线状态（菜单点击那条路已经写过一次 store，这里是兜底：比如玩家在别的插件/
-    // 命令行工具里改了 availability，我们也捕获）
-    // 注意：不持久化 away 状态，因为它是客户端自动设置的（玩家一段时间不操作），
-    // 不应作为下次启动的默认状态
+    // Sync availability as a fallback for external changes outside our menu.
+    // Do not persist away because the client sets it automatically after inactivity.
     if (me.availability && me.availability !== 'away' && store.get('availability') !== me.availability) {
       store.set('availability', me.availability)
       currentAvailability = me.availability
@@ -334,12 +373,12 @@ function unsubscribeChatMeSync() {
   }
 }
 
-/** 关闭已有的菜单 */
+/** Close any existing menu. */
 function closeAvailabilityMenu() {
   document.getElementById(MENU_ID)?.remove()
 }
 
-/** 创建并显示状态选择菜单 */
+/** Create and show the availability selection menu. */
 function showAvailabilityMenu(anchor: HTMLElement) {
   closeAvailabilityMenu()
 
@@ -364,11 +403,9 @@ function showAvailabilityMenu(anchor: HTMLElement) {
       if (option.value !== currentAvailability) {
         currentAvailability = option.value
 
-        // 写 store 前先看当前阶段：只在空闲阶段（None/Lobby）持久化。
-        // 游戏中/选人中/结算中临时切一下不该被当成"下次启动的默认状态"，
-        // 否则会造成"玩家游戏中切了一下勿扰 → 下次启动恢复成勿扰 → 又触发缝合怪"的滚雪球。
-        // 同样不持久化 away 状态，它是客户端自动设置的（玩家一段时间不操作），
-        // 不应作为下次启动的默认状态。
+        // Persist only during idle phases (None/Lobby).
+        // Temporary changes during games, champ select, or post-game should not become startup defaults.
+        // Also do not persist away because the client sets it automatically after inactivity.
         lcu.getGameflowPhase()
           .then((phase) => {
             if ((phase === 'None' || phase === 'Lobby') && option.value !== 'away') {
@@ -379,11 +416,11 @@ function showAvailabilityMenu(anchor: HTMLElement) {
             }
           })
           .catch(() => {
-            // phase 拉不到时保守起见不写 store
+            // If phase cannot be fetched, skip writing store conservatively.
             logger.warn('[Availability] 无法获取 gameflow phase，跳过持久化')
           })
 
-        // PUT availability 请求本身不受阶段限制——用户点了就按用户意图发
+        // The PUT itself is not phase-limited; a user click should apply immediately.
         lcu.setAvailability(option.value)
           .then(() => logger.info('[Availability] 已切换: %s', option.value))
           .catch((err) => logger.error('[Availability] 切换失败:', err))
@@ -394,48 +431,48 @@ function showAvailabilityMenu(anchor: HTMLElement) {
     menu.appendChild(btn)
   }
 
-  // 计算 fixed 定位坐标，基于 anchor 的位置
+  // Compute fixed-position coordinates from the anchor.
   const rect = anchor.getBoundingClientRect()
   menu.style.top = `${rect.bottom + 6}px`
   menu.style.left = `${rect.left + rect.width / 2 - 6}px` // 60 ≈ min-width/2
 
   document.body.appendChild(menu)
 
-  // 点击外部关闭
+  // Close on outside click.
   const onOutsideClick = (e: MouseEvent) => {
     if (!menu.contains(e.target as Node)) {
       closeAvailabilityMenu()
       document.removeEventListener('mousedown', onOutsideClick, true)
     }
   }
-  // 延迟一帧再绑定，避免当前这次点击立刻触发关闭
+  // Bind one frame later so the current click does not close the menu immediately.
   requestAnimationFrame(() => {
     document.addEventListener('mousedown', onOutsideClick, true)
   })
 }
 
-/** 是否启用"解锁在线状态切换"功能（由 features.ts 的开关控制） */
+/** Whether availability switching is enabled by the features.ts toggle. */
 let availabilityHijackEnabled = false
 
-/** 设置开关状态（供 features.ts 调用） */
+/** Set toggle state, called from features.ts. */
 export function setAvailabilityHijackEnabled(enabled: boolean) {
   availabilityHijackEnabled = enabled
   if (enabled) {
-    // 启用时：注入状态菜单接管任务。restore 由 registerAllInjections 统一负责，这里不重复。
+    // When enabled, register the menu hijack task. Restore is handled by registerAllInjections.
     injector.register(tryHijackAvailabilityHitbox)
   } else {
-    // 禁用时：取消注入任务，并关闭可能已打开的菜单
+    // When disabled, unregister the task and close any open menu.
     injector.unregister(tryHijackAvailabilityHitbox)
     closeAvailabilityMenu()
   }
 }
 
 /**
- * 注入任务：接管 .lol-social-availability-hitbox 的点击事件
- * 阻止客户端原有逻辑，替换为自定义的状态选择菜单
+ * Injection task: hijack clicks on .lol-social-availability-hitbox.
+ * Replaces the native behavior with our custom availability menu.
  *
- * 注：事件监听只能绑定一次（用 HIJACKED_ATTR 保证幂等），
- *    开关关闭时通过 availabilityHijackEnabled flag 让 listener 放行客户端原逻辑。
+ * The event listener is attached once using HIJACKED_ATTR for idempotency.
+ * When disabled, availabilityHijackEnabled lets native client behavior pass through.
  */
 function tryHijackAvailabilityHitbox(): boolean {
   const hitbox = document.querySelector(`.social-identity-block .lol-social-availability-hitbox:not([${HIJACKED_ATTR}])`) as HTMLElement | null
@@ -444,14 +481,14 @@ function tryHijackAvailabilityHitbox(): boolean {
   hitbox.setAttribute(HIJACKED_ATTR, 'true')
 
   hitbox.addEventListener('click', (e) => {
-    // 开关未开时：放行，走客户端默认行为
+    // If disabled, pass through to the native client behavior.
     if (!availabilityHijackEnabled) return
 
     e.stopPropagation()
     e.stopImmediatePropagation()
     e.preventDefault()
     logger.debug('Availability hitbox clicked')
-    // 已经打开则关闭，否则打开
+    // Toggle the menu.
     if (document.getElementById(MENU_ID)) {
       closeAvailabilityMenu()
       logger.debug('Availability menu closed')
@@ -465,19 +502,19 @@ function tryHijackAvailabilityHitbox(): boolean {
   return true
 }
 
-// ==================== 隐藏云顶之弈入口 ====================
+// ==================== Hide TFT Entry ====================
 
-/** 是否启用"隐藏云顶之弈入口"功能 */
+/** Whether hiding the TFT entry is enabled. */
 let hideTFTEnabled = false
 
-/** 设置开关状态（供 features.ts 调用） */
+/** Set toggle state, called from features.ts. */
 export function setHideTFTEnabled(enabled: boolean) {
   hideTFTEnabled = enabled
   if (enabled) {
     injector.register(tryRemoveTFT)
   } else {
     injector.unregister(tryRemoveTFT)
-    // 恢复被隐藏的元素：移除 data-sonaenhance-hidden 标记，让元素重新显示
+    // Restore hidden elements by removing our hidden marker.
     restoreOfficialEntries(TFT_HIDDEN_ATTR)
   }
 }
@@ -485,12 +522,11 @@ export function setHideTFTEnabled(enabled: boolean) {
 const TFT_HIDDEN_ATTR = `${HIJACKED_ATTR}-tft`
 const TFT_SELECTORS = [
   '.menu_item_navbar_tft',
-  'div[data-game-mode="TFT"]',
 ]
 
 /**
- * 注入任务：隐藏云顶之弈入口
- * 隐藏顶部导航栏 TFT 菜单项
+ * Injection task: hide TFT entry points.
+ * Hides the top-navbar TFT menu item.
  */
 function tryRemoveTFT(): boolean {
   if (!hideTFTEnabled) return true
@@ -505,25 +541,36 @@ let hideSummonerRiftModesEnabled = false
 let hideAramModeEnabled = false
 let hideArenaModeEnabled = false
 let hideCustomGameSectionEnabled = false
+let hideTFTPlayCardEnabled = false
 
 const SUMMONER_RIFT_HIDDEN_ATTR = `${HIJACKED_ATTR}-summoner-rift`
 const ARAM_HIDDEN_ATTR = `${HIJACKED_ATTR}-aram`
 const ARENA_HIDDEN_ATTR = `${HIJACKED_ATTR}-arena`
 const CUSTOM_GAME_HIDDEN_ATTR = `${HIJACKED_ATTR}-custom-game`
+const TFT_PLAY_CARD_HIDDEN_ATTR = `${HIJACKED_ATTR}-tft-play-card`
+const ARAM_STYLE_ID = 'sonaenhance-hide-aram-style'
 
 const SUMMONER_RIFT_SELECTORS = [
   'div[data-game-mode="CLASSIC"]',
   'div[data-game-mode="SWIFTPLAY"]',
+  '[data-game-mode="CLASSIC"]',
+  '[data-game-mode="SWIFTPLAY"]',
   'lol-uikit-navigation-item[data-category="kVersusAI"]',
   'lol-uikit-navigation-item[data-category="kTraining"]',
 ]
-const ARAM_SELECTORS = ['div[data-game-mode="ARAM"]']
-const ARENA_SELECTORS = ['div[data-game-mode="CHERRY"]']
+const ARAM_SELECTORS = [
+  '[data-game-mode="ARAM"]',
+  '[data-game-mode*="ARAM"]',
+  '[data-game-mode="KIWI"]',
+  '[data-game-mode*="KIWI"]',
+]
+const ARAM_TEXT_LABELS = ['极地大乱斗', '大乱斗', 'ARAM', '하울링', 'Howling Abyss']
+const ARENA_SELECTORS = ['div[data-game-mode="CHERRY"]', '[data-game-mode="CHERRY"]']
 const CUSTOM_GAME_SELECTORS = [
   'lol-uikit-navigation-item[data-category="CreateCustom"]',
   'lol-uikit-navigation-item[data-category="JoinCustom"]',
 ]
-
+const TFT_PLAY_CARD_SELECTORS = ['[data-game-mode="TFT"]', '[data-game-mode*="TFT"]']
 export function setHideSummonerRiftModesEnabled(enabled: boolean) {
   hideSummonerRiftModesEnabled = enabled
   if (enabled) {
@@ -540,6 +587,7 @@ export function setHideAramModeEnabled(enabled: boolean) {
     injector.register(tryHideAramMode)
   } else {
     injector.unregister(tryHideAramMode)
+    removeStyleNode(ARAM_STYLE_ID)
     restoreOfficialEntries(ARAM_HIDDEN_ATTR)
   }
 }
@@ -564,6 +612,16 @@ export function setHideCustomGameSectionEnabled(enabled: boolean) {
   }
 }
 
+export function setHideTFTPlayCardEnabled(enabled: boolean) {
+  hideTFTPlayCardEnabled = enabled
+  if (enabled) {
+    injector.register(tryHideTFTPlayCard)
+  } else {
+    injector.unregister(tryHideTFTPlayCard)
+    restoreOfficialEntries(TFT_PLAY_CARD_HIDDEN_ATTR)
+  }
+}
+
 function tryHideSummonerRiftModes(): boolean {
   if (!hideSummonerRiftModesEnabled) return true
   hideOfficialEntries(SUMMONER_RIFT_SELECTORS, SUMMONER_RIFT_HIDDEN_ATTR)
@@ -572,7 +630,16 @@ function tryHideSummonerRiftModes(): boolean {
 
 function tryHideAramMode(): boolean {
   if (!hideAramModeEnabled) return true
+  upsertStyleNode(ARAM_STYLE_ID, `
+    [data-game-mode="ARAM"],
+    [data-game-mode*="ARAM"],
+    [data-game-mode="KIWI"],
+    [data-game-mode*="KIWI"] {
+      display: none !important;
+    }
+  `)
   hideOfficialEntries(ARAM_SELECTORS, ARAM_HIDDEN_ATTR)
+  hideOfficialEntriesByText(ARAM_TEXT_LABELS, ARAM_HIDDEN_ATTR)
   return true
 }
 
@@ -588,21 +655,64 @@ function tryHideCustomGameSection(): boolean {
   return true
 }
 
-// ==================== 隐藏右侧导航栏文字 ====================
+function tryHideTFTPlayCard(): boolean {
+  if (!hideTFTPlayCardEnabled) return true
+  hideOfficialEntries(TFT_PLAY_CARD_SELECTORS, TFT_PLAY_CARD_HIDDEN_ATTR)
+  return true
+}
 
-/** 是否启用"隐藏右侧导航栏文字"功能 */
+export function refreshOfficialEntryHiding() {
+  tryRemoveTFT()
+  tryHideSummonerRiftModes()
+  tryHideAramMode()
+  tryHideArenaMode()
+  tryHideCustomGameSection()
+  tryHideTFTPlayCard()
+  tryHideRightNavText()
+}
+
+export function getOfficialEntryHidingDebug() {
+  return {
+    flags: {
+      hideTFTEnabled,
+      hideSummonerRiftModesEnabled,
+      hideAramModeEnabled,
+      hideArenaModeEnabled,
+      hideCustomGameSectionEnabled,
+      hideTFTPlayCardEnabled,
+      hideRightNavTextEnabled,
+    },
+    styleNodes: [ARAM_STYLE_ID]
+      .filter((id) => Boolean(document.getElementById(id))),
+    counts: {
+      tftTopNav: countSelectors(TFT_SELECTORS),
+      tftPlayCard: countSelectors(TFT_PLAY_CARD_SELECTORS),
+      aramMode: countSelectors(ARAM_SELECTORS),
+      hidden: {
+        tft: countSelector(`[${TFT_HIDDEN_ATTR}]`),
+        tftPlayCard: countSelector(`[${TFT_PLAY_CARD_HIDDEN_ATTR}]`),
+        aram: countSelector(`[${ARAM_HIDDEN_ATTR}]`),
+      },
+    },
+    refresh: refreshOfficialEntryHiding,
+  }
+}
+
+// ==================== Hide Right Navigation Text ====================
+
+/** Whether hiding right navigation text is enabled. */
 let hideRightNavTextEnabled = false
 
 const NAV_TEXT_HIDDEN_ATTR = `${HIJACKED_ATTR}-nav-text`
 
-/** 设置开关状态（供 features.ts 调用） */
+/** Set toggle state, called from features.ts. */
 export function setHideRightNavTextEnabled(enabled: boolean) {
   hideRightNavTextEnabled = enabled
   if (enabled) {
     injector.register(tryHideRightNavText)
   } else {
     injector.unregister(tryHideRightNavText)
-    // 恢复被隐藏的文字
+    // Restore hidden text.
     const nav = document.querySelector('.right-nav-menu')
     if (nav) {
       nav.removeAttribute(NAV_TEXT_HIDDEN_ATTR)
@@ -615,8 +725,8 @@ export function setHideRightNavTextEnabled(enabled: boolean) {
 }
 
 /**
- * 注入任务：隐藏主页右侧导航栏文字
- * 查找 right-nav-menu 内所有 lol-uikit-navigation-item，访问 shadowRoot 隐藏 menu-item-small-text
+ * Injection task: hide home right-nav text.
+ * Finds all lol-uikit-navigation-item nodes in right-nav-menu and hides menu-item-small-text in shadowRoot.
  */
 function tryHideRightNavText(): boolean {
   if (!hideRightNavTextEnabled) return true
@@ -635,43 +745,42 @@ function tryHideRightNavText(): boolean {
       logger.info(`[HideRightNavText] Hide right nav text: ${el.textContent}`)
     }
   })
-  // 只有所有 item 都成功隐藏了 text 才打 tag，否则下帧继续尝试
+  // Tag only after every item text is hidden; otherwise retry on the next frame.
   if (hiddenCount > 0) {
     nav.setAttribute(NAV_TEXT_HIDDEN_ATTR, 'true')
   }
   return true
 }
 
-// ==================== 注册所有注入点 ====================
+// ==================== Register All Injection Points ====================
 
 /**
- * 注册所有注入任务并启动全局 DOM 守护
- * 在 index.tsx 的 load() 中调用一次即可
+ * Register all injection tasks and start the global DOM guard.
+ * Call once from index.tsx load().
  */
 export function registerAllInjections() {
   injector.register(tryInjectSonaButton)
-  // tryHijackAvailabilityHitbox 由 features.ts 的 unlockAvailability 开关按需注册
+  // tryHijackAvailabilityHitbox is registered by the unlockAvailability toggle in features.ts.
 
-  // 状态同步启动顺序（重要！）：
-  //   ① 先主动拉一次 ChatMe 快照做 restore：对齐 store 和客户端状态（只写不校验）
-  //   ② 再订阅 /lol-chat/v1/me 实时事件：处理后续所有变化
-  //   ③ 订阅后延迟 3s 做一次校验：兜住"restore 写入成功但客户端之后又把签名清掉"的时间窗口
+  // Presence sync startup order:
+  //   1. Fetch one ChatMe snapshot for restore and align store with client state.
+  //   2. Subscribe to /lol-chat/v1/me events for future changes.
+  //   3. Run a delayed verification after subscribing to catch startup races.
   //
-  // 为什么把校验放到 subscribe 之后？
-  //   完整重启客户端时，客户端自己的 XMPP 初始化比 Sona 晚，它可能在 T2 时把 /lol-chat/v1/me
-  //   推成"干净的初始状态"（签名被清空）。这条推送理论上我们 WS 能抓，但客户端有时会走
-  //   "本地同步"而非事件路径，导致 listener 根本没触发。所以最稳的办法是：订阅后主动再核一次。
+  // Verification runs after subscribe because the client's XMPP init can arrive later than Sona.
+  // If that late sync clears the status message without emitting a normal event, the delayed
+  // verification catches and repairs it.
   restoreAvailabilityAndStatus().finally(() => {
-    // 无论 restore 成功或失败，都要挂监听——否则玩家之后改签名就没法捕获
+    // Always attach the listener so later user status-message edits are captured.
     subscribeChatMeSync()
-    // 挂监听后再做一次延迟校验（fire-and-forget，不阻塞 injector.start）
+    // Run delayed verification after attaching the listener, without blocking injector.start.
     verifyAfterSubscribe()
   })
 
   injector.start()
 }
 
-/** 供测试/清理用（实际不会调用，因为插件生命周期是进程级） */
+/** Test/cleanup helper. Normally unused because plugin lifetime is process-wide. */
 export function unregisterAllInjections() {
   unsubscribeChatMeSync()
 }

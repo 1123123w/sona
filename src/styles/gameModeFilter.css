@@ -1,0 +1,103 @@
+/* Play-page game mode visibility chips */
+
+.sonaenhance-game-mode-filter-bar {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  padding: 0 16px;
+}
+
+.sonaenhance-mode-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px 0 6px;
+  background: rgba(1, 10, 19, 0.55);
+  border: 1px solid rgba(120, 90, 40, 0.6);
+  border-radius: 0;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    opacity 0.15s ease,
+    transform 0.1s ease;
+}
+
+.sonaenhance-mode-chip:hover {
+  background: rgba(30, 35, 40, 0.8);
+  border-color: #c8aa6e;
+}
+
+.sonaenhance-mode-chip:active {
+  transform: scale(0.97);
+}
+
+.sonaenhance-mode-chip--on {
+  background: rgba(200, 170, 110, 0.15);
+  border-color: #c8aa6e;
+  box-shadow: 0 0 6px rgba(200, 170, 110, 0.18);
+}
+
+.sonaenhance-mode-chip--off {
+  opacity: 0.55;
+}
+
+.sonaenhance-mode-chip--off:hover {
+  opacity: 0.85;
+}
+
+.sonaenhance-mode-chip__icon {
+  width: 20px;
+  height: 20px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  flex-shrink: 0;
+}
+
+.sonaenhance-mode-chip__name {
+  font-size: 11px;
+  line-height: 1;
+  font-family: inherit;
+  color: #a09b8c;
+  white-space: nowrap;
+}
+
+.sonaenhance-mode-chip--on .sonaenhance-mode-chip__name {
+  color: #f0e6d2;
+}
+
+.game-type-card[data-sonaenhance-mode-filter="true"] {
+  transition:
+    opacity 0.24s ease,
+    transform 0.24s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 0.24s ease;
+  will-change: opacity, transform, filter;
+}
+
+.game-type-card[data-sonaenhance-mode-animation="visible"] {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  filter: blur(0);
+}
+
+.game-type-card[data-sonaenhance-mode-animation="showing"],
+.game-type-card[data-sonaenhance-mode-animation="hiding"] {
+  opacity: 0;
+  filter: blur(2px);
+  pointer-events: none;
+}
+
+.game-type-card[data-sonaenhance-mode-direction="left"][data-sonaenhance-mode-animation="showing"],
+.game-type-card[data-sonaenhance-mode-direction="left"][data-sonaenhance-mode-animation="hiding"] {
+  transform: translateX(-32px) scale(0.96);
+}
+
+.game-type-card[data-sonaenhance-mode-direction="right"][data-sonaenhance-mode-animation="showing"],
+.game-type-card[data-sonaenhance-mode-direction="right"][data-sonaenhance-mode-animation="hiding"] {
+  transform: translateX(32px) scale(0.96);
+}

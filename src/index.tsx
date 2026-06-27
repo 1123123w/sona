@@ -1,9 +1,9 @@
 /// <reference path="../pengu.d.ts" />
-declare const __PLUGIN_VERSION__: string  //  这个变量信息在vite.config.js中定义
+declare const __PLUGIN_VERSION__: string  // Defined in vite.config.ts.
 
 import { createRoot } from 'react-dom/client'
 import { App } from '@/App'
-import { installCoreDebugHandles } from '@/lib/debug'
+import { installCoreDebugHandles, registerDebugHandle } from '@/lib/debug'
 import { createLogger } from '@/lib/logger'
 import { registerAllInjections } from '@/lib/injections'
 import { initFeatures } from '@/lib/features'
@@ -18,6 +18,7 @@ import { installAdBlockXhrRules } from '@/lib/xhr'
 import '@/styles/index.css'
 import '@/styles/inject.css'
 import '@/styles/availabilityMenu.css'
+import '@/styles/gameModeFilter.css'
 
 const PLUGIN_NAME = 'Sona-E'
 const PLUGIN_VERSION = __PLUGIN_VERSION__
@@ -69,16 +70,26 @@ function ensureContainer(runtime: SonaRuntime) {
 // Store context for use across the plugin
 let penguContext: PenguContext | null = null
 
+export function getPluginMeta() {
+  const meta = penguContext?.meta
+  return {
+    name: typeof meta?.name === 'string' && meta.name ? meta.name : PLUGIN_NAME,
+    version: typeof meta?.version === 'string' && meta.version ? meta.version : PLUGIN_VERSION,
+    raw: meta ?? null,
+  }
+}
+
 /**
  * Called before League Client initializes its scripts.
  * Use this for early hooks like RCP interception.
  */
 export function init(context: PenguContext) {
   penguContext = context
+  logger.info('Pengu plugin meta: %o', getPluginMeta())
   installAdBlockXhrRules()
   lcu.bindContext(context)
 
-  // 必须在 init 阶段注册 RCP hook——要赶在客户端调用 getEmber 之前
+  // Register the RCP hook in init so it runs before the client calls getEmber.
   installEmberHook(context)
   registerChromaRules()
 
@@ -92,10 +103,14 @@ export function init(context: PenguContext) {
 export function load() {
   logger.info('Plugin loading...')
   installCoreDebugHandles()
-  registerAllInjections()  //  注册所有 DOM 注入点并启动守护
-  initFeatures()           //  初始化功能监听（自动接受、解锁签名等）
-  registerHotkey()         //  注册 F1 快捷键
-  initAssets()             //  初始化装备/技能资源映射（异步，不阻塞）
+  registerDebugHandle('pluginMeta', () => ({
+    updatedAt: Date.now(),
+    ...getPluginMeta(),
+  }))
+  registerAllInjections()  // Register DOM injection tasks and start the observer.
+  initFeatures()           // Initialize feature listeners.
+  registerHotkey()         // Register the F1 hotkey.
+  initAssets()             // Initialize asset mappings asynchronously.
   mountApp()
   void checkForUpdates()
 }
@@ -108,8 +123,8 @@ export function getContext(): PenguContext | null {
 }
 
 /**
- * 容器守护注入任务
- * 检测 #sonaenhance-root 是否脱离 DOM，脱离则自动重新挂载
+ * Container guard injection task.
+ * Reattaches #sonaenhance-root if the host DOM removes it.
  */
 function tryGuardContainer(): boolean {
   const runtime = getRuntime()
@@ -132,7 +147,7 @@ function mountApp() {
   const runtime = getRuntime()
   const container = ensureContainer(runtime)
 
-  // 将容器守护注册到全局 InjectorManager
+  // Register the container guard with the global InjectorManager.
   injector.register(tryGuardContainer)
 
   if (!runtime.root) {
