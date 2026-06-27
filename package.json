@@ -12,6 +12,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:plugin": "tsc && vite build --mode plugin",
     "preview": "vite preview",
     "update-balance": "tsx scripts/update-champion-balance.ts"
   },

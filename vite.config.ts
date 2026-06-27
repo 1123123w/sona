@@ -88,6 +88,7 @@ function penguServe(): Plugin {
  */
 function penguBuild(): Plugin {
   let config: ResolvedConfig
+  let shouldCopyToPlugins = false
 
   return {
     name: 'pengu-build',
@@ -95,6 +96,7 @@ function penguBuild(): Plugin {
 
     configResolved(resolvedConfig) {
       config = resolvedConfig
+      shouldCopyToPlugins = resolvedConfig.mode === 'plugin'
     },
 
     closeBundle() {
@@ -118,7 +120,7 @@ function penguBuild(): Plugin {
         // Add CSS import at top
         js = `import "./index.css";\n${js}`
 
-        // Pengu Loader 插件头注释（识别插件元信息用）
+        // Pengu Loader plugin header used for plugin metadata.
         const banner = [
           '/**',
           ' * @name Sona-E',
@@ -140,6 +142,11 @@ function penguBuild(): Plugin {
         let css = fs.readFileSync(cssPath, 'utf-8')
         css = css.replaceAll('url(/assets/', 'url(./assets/')
         fs.writeFileSync(cssPath, css)
+      }
+
+      if (!shouldCopyToPlugins) {
+        console.log(`\n  ✅ Plugin "${PLUGIN_NAME}" built to ${outDir}\n`)
+        return
       }
 
       // Copy build output to plugins directory (skip if it's the project root)
@@ -192,7 +199,7 @@ export default defineConfig({
   server: {
     port: 3000,
     https: {},
-    origin: 'https://localhost:3000',// 必须加这个，否则引入图片资源等会失败
+    origin: 'https://localhost:3000', // Required for loading image assets in dev.
   },
   build: {
     outDir: 'dist',
@@ -204,6 +211,10 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: undefined,
+        chunkFileNames: (chunkInfo) => {
+          if (chunkInfo.name === 'index') return 'main.js'
+          return '[name].js'
+        },
         assetFileNames: (assetInfo) => {
           if (assetInfo.names?.[0]?.endsWith('.css')) return 'index.css'
           return 'assets/[name]-[hash][extname]'
