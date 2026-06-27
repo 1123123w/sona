@@ -17,7 +17,7 @@
   width: 48px;
 }
 
-/* ---- Logo 区域 ---- */
+/* ---- Logo area ---- */
 .sonaenhance-sidebar-logo {
   display: flex;
   align-items: center;
@@ -46,7 +46,7 @@
   white-space: nowrap;
 }
 
-/* ---- 导航列表 ---- */
+/* ---- Navigation list ---- */
 .sonaenhance-sidebar-nav {
   flex: 1;
   display: flex;
@@ -58,12 +58,12 @@
   min-height: 0;
 }
 
-/* 隐藏滚动条 */
+/* Hide scrollbar */
 .sonaenhance-sidebar-nav::-webkit-scrollbar {
   width: 0;
 }
 
-/* ---- 导航项 ---- */
+/* ---- Navigation item ---- */
 .sonaenhance-sidebar-item {
   display: flex;
   align-items: center;
@@ -128,7 +128,7 @@
   text-overflow: ellipsis;
 }
 
-/* 收缩状态下导航项居中 */
+/* Center navigation items while collapsed. */
 .sonaenhance-sidebar--collapsed .sonaenhance-sidebar-item {
   justify-content: center;
   padding: 8px;
@@ -139,7 +139,7 @@
   padding: 14px 0;
 }
 
-/* ---- 底部按钮区 ---- */
+/* ---- Footer actions ---- */
 .sonaenhance-sidebar-footer {
   display: flex;
   justify-content: center;

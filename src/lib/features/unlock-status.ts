@@ -1,7 +1,7 @@
 import { logger } from '@/index'
 import { injector } from '@/lib/InjectorManager'
 
-// ==================== 解锁自定义签名 ====================
+// ==================== Unlock Custom Status Message ====================
 
 function tryUnlockStatusInput(): boolean {
   const statusEl = document.querySelector('.lower-details .status.disabled')

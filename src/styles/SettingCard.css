@@ -1,6 +1,6 @@
 /* Sona Setting Card & Group Styles */
 
-/* ---- 设置分组 ---- */
+/* ---- Setting group ---- */
 .sonaenhance-setting-group {
   margin-bottom: 28px;
 }
@@ -23,7 +23,7 @@
   gap: 8px;
 }
 
-/* ---- 设置卡片 ---- */
+/* ---- Setting card ---- */
 .sonaenhance-setting-card {
   position: relative;
   z-index: 1;
@@ -48,7 +48,7 @@
   transform: translateX(2px);
 }
 
-/* 包含下拉菜单的卡片，展开时层级最高 */
+/* Cards containing open dropdowns should stack above neighbors. */
 .sonaenhance-setting-card:has(.sonaenhance-select-dropdown) {
   z-index: 200;
 }
@@ -88,7 +88,7 @@
   min-width: 50px;
 }
 
-/* ---- 通用小标题/说明文字 ---- */
+/* ---- Shared subtitle/help text ---- */
 .sonaenhance-subtitle {
   margin: 8px 0 4px;
   font-size: 11px;

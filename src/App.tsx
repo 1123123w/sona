@@ -58,11 +58,11 @@ export function App() {
     })
   }, [])
 
-  // 监听开发者模式变化
+  // Watch developer mode changes.
   useEffect(() => {
     return store.onChange('developerMode', (v) => {
       setDevMode(v)
-      // 如果关闭开发者模式时正在调试页，切回主页
+      // Return to the home page when the debug page is hidden.
       if (!v && activePageId === 'debug') {
         setActivePageId('home')
       }
@@ -78,7 +78,7 @@ export function App() {
     })
   }, [activePageId])
 
-  // 动态构建侧边栏项目
+  // Build sidebar items from the current feature state.
   const sidebarItems = useMemo(() => {
     const baseSidebarItems: SidebarItem[] = [
       { id: 'home', icon: <HomeIcon />, label: t('nav.home') },

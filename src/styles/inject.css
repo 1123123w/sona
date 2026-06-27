@@ -1,6 +1,6 @@
 /* Sona Entry Button Styles */
 
-/* ✨ 呼吸光环动画 —— 模拟 Sona 的魔法韵律 */
+/* Breathing glow animation. */
 @keyframes sonaenhance-glow-pulse {
   0%, 100% {
     box-shadow:
@@ -14,7 +14,7 @@
   }
 }
 
-/* ✨ 外圈涟漪扩散 —— 像琴弦拨动后的音波 */
+/* Outer ripple animation. */
 @keyframes sonaenhance-ripple {
   0% {
     transform: scale(1);
@@ -26,22 +26,21 @@
   }
 }
 
-/* ✨ 悬停时的旋转微光 */
+/* Rotating highlight on hover. */
 @keyframes sonaenhance-ring-spin {
   0%   { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
 
 .sonaenhance-entry-btn {
-  /* 🪄 按钮现在是 .play-button-container 的兄弟节点，
-     绝对定位基于共同的父容器 */
+  /* The button is a sibling of .play-button-container and shares its parent for positioning. */
   position: absolute;
-  /* 定位到 play-button-container 的左侧 */
+  /* Position to the left of play-button-container. */
   left: 37px;
   top: 50%;
   transform: translateX(-100%) translateY(-50%);
 
-  /* 🪄 魔法 3：让内部的 svg 音符居中 */
+  /* Center the inner SVG note. */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -57,11 +56,11 @@
   pointer-events: auto;
   z-index: 9999;
 
-  /* ✨ 默认就有呼吸光环 */
+  /* Enable the breathing glow by default. */
   animation: sonaenhance-glow-pulse 2.5s ease-in-out infinite;
 }
 
-/* ✨ 涟漪伪元素 —— 持续扩散的音波环 */
+/* Expanding ripple pseudo-element. */
 .sonaenhance-entry-btn::before {
   content: '';
   position: absolute;
@@ -72,7 +71,7 @@
   pointer-events: none;
 }
 
-/* ✨ 旋转光弧伪元素 —— hover 时出现 */
+/* Rotating arc pseudo-element shown on hover. */
 .sonaenhance-entry-btn::after {
   content: '';
   position: absolute;
@@ -94,19 +93,19 @@
     0 0 12px rgba(200, 170, 110, 0.4),
     0 0 24px rgba(100, 180, 255, 0.15),
     inset 0 0 8px rgba(200, 170, 110, 0.1);
-  /* ⚠️ 避坑重点：要把原始 transform 带上，再加上缩放 scale(1.08) */
+  /* Preserve the original transform before adding scale(1.08). */
   transform: translateX(-100%) translateY(-50%) scale(1.08);
-  /* 悬停时暂停呼吸，改用更亮的静态光 */
+  /* Pause breathing on hover and use a brighter static glow. */
   animation: none;
 }
 
-/* ✨ hover 时旋转光弧出现 */
+/* Show rotating arc on hover. */
 .sonaenhance-entry-btn:hover::after {
   opacity: 1;
   animation: sonaenhance-ring-spin 2s linear infinite;
 }
 
-/* ✨ hover 时涟漪加速 */
+/* Speed up ripple on hover. */
 .sonaenhance-entry-btn:hover::before {
   animation: sonaenhance-ripple 1.5s ease-out infinite;
   border-color: rgba(200, 170, 110, 0.5);
@@ -121,13 +120,13 @@
     0 0 28px rgba(100, 180, 255, 0.12);
 }
 
-/* ✨ active 状态涟漪更明显 */
+/* Stronger ripple while active. */
 .sonaenhance-entry-btn--active::before {
   border-color: rgba(200, 170, 110, 0.5);
   animation: sonaenhance-ripple 2s ease-out infinite;
 }
 
-/* ✨ active 状态旋转光弧常驻 */
+/* Keep the rotating arc visible while active. */
 .sonaenhance-entry-btn--active::after {
   opacity: 0.7;
   animation: sonaenhance-ring-spin 3s linear infinite;
@@ -144,13 +143,13 @@
   object-fit: contain;
   pointer-events: none;
   border-radius: 50%;
-  /* ✨ 给头像加一点柔和的金色内发光 */
+  /* Add a soft golden inner glow to the avatar. */
   filter: drop-shadow(0 0 2px rgba(200, 170, 110, 0.3));
   transition: filter 0.3s ease;
 }
 
 .sonaenhance-entry-btn:hover .sonaenhance-entry-icon {
-  /* ✨ hover 时头像光芒更强 */
+  /* Increase avatar glow on hover. */
   filter: drop-shadow(0 0 4px rgba(200, 170, 110, 0.6));
 }
 

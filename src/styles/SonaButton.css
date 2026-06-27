@@ -1,4 +1,4 @@
-/* Sona Button - 海克斯风格按钮 */
+/* Sona Button */
 
 .sonaenhance-btn {
   position: relative;
@@ -22,7 +22,7 @@
   cursor: not-allowed;
 }
 
-/* Primary 变体 */
+/* Primary variant */
 .sonaenhance-btn--primary {
   background: rgba(30, 35, 40, 0.8);
   border: 1px solid #785a28;
@@ -42,7 +42,7 @@
   transform: translateY(1px);
 }
 
-/* Secondary 变体 */
+/* Secondary variant */
 .sonaenhance-btn--secondary {
   background: transparent;
   border: 1px solid transparent;
@@ -59,7 +59,7 @@
   transform: translateY(1px);
 }
 
-/* 扫光特效 */
+/* Shine effect */
 .sonaenhance-btn-shine {
   position: absolute;
   top: 0;

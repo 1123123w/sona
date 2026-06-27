@@ -106,12 +106,12 @@ export function HomePage() {
 
   return (
     <div className="sonaenhance-home">
-      {/* SONA 标题 */}
+      {/* SONA title */}
       <h1 className="sonaenhance-home-brand">
         <span className="sonaenhance-home-brand-text">SONA-E</span>
       </h1>
 
-      {/* 头像 */}
+      {/* Avatar */}
       <div className="sonaenhance-home-avatar-wrap">
         <div className="sonaenhance-home-avatar-glow" />
         <img
@@ -122,7 +122,7 @@ export function HomePage() {
         />
       </div>
 
-      {/* 欢迎语 */}
+      {/* Welcome copy */}
       <div className="sonaenhance-home-welcome">
         <h2 className="sonaenhance-home-heading">{t('home.welcome')}</h2>
         <p className="sonaenhance-home-subtitle">
@@ -172,7 +172,7 @@ export function HomePage() {
         playerName={matchModalName}
       />
 
-      {/* 琴女语录 */}
+      {/* Sona quote */}
       <p className="sonaenhance-home-quote">
         {t('home.quote')}
         <br />

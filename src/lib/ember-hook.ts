@@ -1,21 +1,21 @@
 /**
- * Ember Hook —— 基于 Pengu Loader 官方 RCP API 实现
+ * Ember Hook based on the official Pengu Loader RCP API.
  *
- * 原理：
- *   1. 客户端所有 Ember 组件都通过 `rcp-fe-ember-libs` 模块的 getEmber() 获取 Ember 实例
- *   2. Pengu Loader 提供 context.rcp.postInit(name, cb) 让插件在该模块初始化后拿到其 api
- *   3. 劫持 api.getEmber：等客户端调用时，在返回的 Ember 上再劫持 Component.extend
- *   4. 每当客户端 Ember.Component.extend({ classNames: ['xxx'], ... }) 创建组件类时，
- *      我们检查 classNames 是否匹配已注册的规则，匹配则：
- *        - 用 Mixin 覆盖成员（包括属性、computed getter、方法）
- *        - 或 wrap 指定方法
+ * How it works:
+ *   1. Client Ember components get the Ember instance through rcp-fe-ember-libs.getEmber().
+ *   2. Pengu Loader exposes context.rcp.postInit(name, cb) so plugins can access that module API.
+ *   3. Hook api.getEmber and then hook Component.extend on the returned Ember instance.
+ *   4. Whenever Ember.Component.extend({ classNames: ['xxx'], ... }) creates a component class,
+ *      match its classNames against registered rules and then:
+ *        - apply a Mixin that overrides members such as properties, computed getters, and methods
+ *        - or wrap selected methods
  *
- * window.Ember 那些被完全封死了，搞不到Ember对象。还是走RCP优雅。
+ * window.Ember is not reliably accessible, so the RCP path is the stable one.
  */
 
 import { logger } from '@/index'
 
-/** Ember.Component 的简单建模（runtime 里实际是 Ember 对象，这里只标注我们用到的部分） */
+/** Minimal model of Ember.Component. Runtime is the real Ember object; this only types what we use. */
 type EmberComponentClass = {
   extend: (...mixins: unknown[]) => EmberComponentClass
   proto: () => Record<string, unknown>
@@ -26,57 +26,56 @@ type EmberNamespace = {
   [key: string]: unknown
 }
 
-/** 方法劫持器：调用原函数的包装，你可以改参数/改返回值 */
+/** Method wrapper that can adjust arguments or return value around the original function. */
 export type MethodWrap = {
-  /** 实例方法名（存在于 Component prototype 上） */
+  /** Instance method name on the Component prototype. */
   name: string
   /**
-   * 替换体。第一个参数是调用原方法的函数，第二个是原参数数组。
-   * 你想调原函数就 `original(...args)` 或自己传改过的 args。
+   * Replacement body. The first argument calls the original method; the second is the original args.
+   * Call `original(...args)` directly or pass modified args.
    */
   replacement: (this: unknown, original: (...args: unknown[]) => unknown, args: unknown[]) => unknown
 }
 
-/** Mixin 工厂：返回会被 Component.extend(...) 合并进去的对象 */
+/** Mixin factory that returns an object merged into Component.extend(...). */
 export type MixinFactory = (Ember: EmberNamespace, extendArgs: unknown[]) => Record<string, unknown>
 
 /**
- * Matcher —— 规则的匹配器，支持三种写法：
- *   - string：精确匹配 classNames 数组里有这个名字的组件（最常用，语义明确）
- *   - '*'：匹配所有组件（慎用，会遍历全部 extend 调用）
- *   - (extendArgs) => boolean：自定义判断，extendArgs 是 Component.extend(...) 被调用时的完整参数
- *     典型用法：判断传入的 mixin 对象里是否含有某个字段
+ * Matcher supported forms:
+ *   - string: exact match against classNames
+ *   - '*': match every component, use carefully because it scans all extend calls
+ *   - (extendArgs) => boolean: custom predicate over the full Component.extend(...) arguments
  */
 export type Matcher = string | ((extendArgs: unknown[]) => boolean)
 
-/** 规则定义 */
+/** Rule definition. */
 export type EmberRule = {
-  /** 用于日志/去重的名字 */
+  /** Name used for logs and dedupe. */
   name: string
-  /** 匹配条件 —— 支持 classNames 字符串 / '*' / 自定义函数 */
+  /** Match condition: classNames string, '*', or custom function. */
   matcher: Matcher
-  /** 可选：覆盖/追加成员的 Mixin 工厂 */
+  /** Optional Mixin factory for overriding or appending members. */
   mixin?: MixinFactory
-  /** 可选：劫持 prototype 上的方法 */
+  /** Optional method wrappers on the prototype. */
   wraps?: MethodWrap[]
 }
 
-// ========== 内部状态 ==========
+// ========== Internal State ==========
 
 const rules: EmberRule[] = []
 let installed = false
 
-/** 防止同一个函数被重复包裹 */
+/** Prevent wrapping the same function repeatedly. */
 const WRAPPED_MARK = Symbol('SonaEmberWrapped')
 
-/** 防止同一个组件 prototype 被同一规则重复处理 */
+/** Prevent applying the same rule repeatedly to one component prototype. */
 const APPLIED_RULES_KEY = '__sonaAppliedRules'
 
-// ========== 核心工具 ==========
+// ========== Core Utilities ==========
 
 /**
- * 包裹一个对象上的方法：让 `replacement` 接到 `(original, args)`，
- * 既能调 original，也能改参数改返回值。幂等（用 Symbol 标记）。
+ * Wrap a method on an object so `replacement` receives `(original, args)`.
+ * It can call original, modify args, or change the return value. Idempotent via Symbol marks.
  */
 function wrapMethod(
   target: Record<string | symbol, unknown>,
@@ -86,7 +85,7 @@ function wrapMethod(
   const fn = target[name]
   if (typeof fn !== 'function') return false
 
-  // 若同一个 name 已被我们包过就跳过（target 维度的标记）
+  // Skip if this name was already wrapped on this target.
   const wrappedSet = (target[WRAPPED_MARK] as Set<string> | undefined) ?? new Set<string>()
   if (wrappedSet.has(name)) return false
 
@@ -102,8 +101,8 @@ function wrapMethod(
 }
 
 /**
- * 从 Ember.Component.extend(...args) 的 args 里抽出 classNames。
- * 客户端典型写法：Component.extend(MixinA, MixinB, { classNames: ['foo-bar'], ... })
+ * Extract classNames from Ember.Component.extend(...args).
+ * Typical client shape: Component.extend(MixinA, MixinB, { classNames: ['foo-bar'], ... })
  */
 function extractClassNames(args: unknown[]): string[] {
   const collected: string[] = []
@@ -121,8 +120,8 @@ function extractClassNames(args: unknown[]): string[] {
 }
 
 /**
- * 对一个 extend 的结果 klass 应用单条规则。
- * 注意：Ember 的 `.extend(mixin)` 返回新的子类，所以要链式更新 klass。
+ * Apply one rule to a klass returned by extend.
+ * Ember `.extend(mixin)` returns a new subclass, so update klass in a chain.
  */
 function applyRuleToClass(
   Ember: EmberNamespace,
@@ -132,7 +131,7 @@ function applyRuleToClass(
 ): EmberComponentClass {
   let cur = klass
 
-  // 1. Mixin 覆盖
+  // 1. Apply Mixin overrides.
   if (rule.mixin) {
     try {
       const mixinObj = rule.mixin(Ember, extendArgs)
@@ -143,12 +142,12 @@ function applyRuleToClass(
     }
   }
 
-  // 2. wraps 劫持方法
+  // 2. Apply method wrappers.
   if (rule.wraps?.length) {
     try {
       const proto = cur.proto() as Record<string | symbol, unknown>
 
-      // proto 维度防重：同一 proto + 同一 rule 只处理一次
+      // Prototype-level dedupe: apply the same rule once per prototype.
       const applied = (proto[APPLIED_RULES_KEY] as Set<string> | undefined) ?? new Set<string>()
       if (!applied.has(rule.name)) {
         for (const w of rule.wraps) {
@@ -167,7 +166,7 @@ function applyRuleToClass(
   return cur
 }
 
-/** 劫持 Ember.Component.extend，每次创建组件类时匹配规则 */
+/** Hook Ember.Component.extend and match rules whenever component classes are created. */
 function hookComponentExtend(Ember: EmberNamespace) {
   const Component = Ember.Component
   if (!Component || typeof Component.extend !== 'function') {
@@ -177,18 +176,18 @@ function hookComponentExtend(Ember: EmberNamespace) {
 
   const target = Component as unknown as Record<string | symbol, unknown>
   if (target[WRAPPED_MARK]) {
-    //logger.info('[EmberHook] Component.extend 已被包裹过，跳过')
+    //logger.info('[EmberHook] Component.extend is already wrapped, skipping')
     return
   }
 
   const originalExtend = Component.extend.bind(Component)
   Component.extend = function (this: unknown, ...args: unknown[]): EmberComponentClass {
-    // 先调原始 extend 得到基础 klass
+    // Call the original extend first to get the base klass.
     let klass = originalExtend(...args) as EmberComponentClass
 
-    // 匹配规则
+    // Match rules.
     if (rules.length > 0) {
-      // classNames 按需计算——只有当确实有字符串 matcher 规则时才遍历提取
+      // Compute classNames lazily only when at least one string matcher exists.
       let classNamesCache: string[] | null = null
       const getClassNames = () => {
         if (classNamesCache === null) classNamesCache = extractClassNames(args)
@@ -200,7 +199,7 @@ function hookComponentExtend(Ember: EmberNamespace) {
         let matched = false
 
         if (typeof m === 'function') {
-          // 函数式 matcher：自定义判断
+          // Function matcher: custom predicate.
           try {
             matched = m(args)
           } catch (e) {
@@ -208,10 +207,10 @@ function hookComponentExtend(Ember: EmberNamespace) {
             matched = false
           }
         } else if (m === '*') {
-          // 通配符：匹配所有组件
+          // Wildcard matcher: match all components.
           matched = true
         } else {
-          // 字符串：精确匹配 classNames
+          // String matcher: exact classNames match.
           matched = getClassNames().includes(m)
         }
 
@@ -228,11 +227,11 @@ function hookComponentExtend(Ember: EmberNamespace) {
   logger.info('[EmberHook] ✅ Ember.Component.extend 已被劫持（当前规则数: %d）', rules.length)
 }
 
-// ========== 公开 API ==========
+// ========== Public API ==========
 
 /**
- * 在 init(context) 阶段调用。必须早于客户端脚本初始化，
- * 所以只能在 Sona 的 init() 里执行，不能在 load() 里。
+ * Call during init(context). It must run before client scripts initialize,
+ * so it belongs in Sona init(), not load().
  */
 export function installEmberHook(context: PenguContext) {
   if (installed) {
@@ -243,10 +242,10 @@ export function installEmberHook(context: PenguContext) {
 
   logger.info('[EmberHook] 注册 rcp-fe-ember-libs postInit...')
 
-  // blocking=true 很关键！
-  //   - false（默认）：只捕获"未来的初始化事件"，Pengu HMR/reload 后注册会错过时机
-  //   - true：若 rcp-fe-ember-libs 已初始化，用缓存 api 立即补跑一次；
-  //           并且目标模块会等回调完成才继续，确保劫持窗口不会被跳过
+  // blocking=true is critical:
+  //   - false (default): only captures future init events, which HMR/reload can miss.
+  //   - true: if rcp-fe-ember-libs already initialized, immediately replays with cached API;
+  //           the target module also waits for the callback, preserving the hook window.
   context.rcp.postInit('rcp-fe-ember-libs', (api: unknown) => {
     const emberLibs = api as { getEmber?: (...a: unknown[]) => Promise<EmberNamespace> }
     if (!emberLibs || typeof emberLibs.getEmber !== 'function') {
@@ -254,7 +253,7 @@ export function installEmberHook(context: PenguContext) {
       return
     }
 
-    // 劫持 getEmber：客户端调用它拿 Ember 时，我们在中间插入 extend 劫持
+    // Hook getEmber so we can insert the extend hook when the client asks for Ember.
     const target = emberLibs as unknown as Record<string | symbol, unknown>
     if (target[WRAPPED_MARK]) {
       logger.info('[EmberHook] getEmber 已被劫持过，跳过')
@@ -280,14 +279,13 @@ export function installEmberHook(context: PenguContext) {
 }
 
 /**
- * 注册一条 Ember 组件规则。
- * 可以在任意时机调用：
- *   - 如果此时 extend 还没跑过，后续触发时自动匹配
- *   - 如果此时 extend 已经跑过（组件已经创建），该条规则对"已存在的类"不生效，
- *     但对"将来再创建的同类组件"依然生效（Ember 会在路由切换时重建组件）
+ * Register one Ember component rule.
+ * Can be called at any time:
+ *   - if extend has not run yet, future calls will match automatically
+ *   - if extend already ran, existing classes are unaffected, but future recreated classes still match
  */
 export function registerEmberRule(rule: EmberRule) {
-  // 简单去重
+  // Simple dedupe.
   const i = rules.findIndex((r) => r.name === rule.name)
   if (i >= 0) {
     rules[i] = rule
@@ -299,7 +297,7 @@ export function registerEmberRule(rule: EmberRule) {
   }
 }
 
-/** 调试用：当前已注册的规则数 */
+/** Debug helper: current registered rule count. */
 export function getEmberRulesCount() {
   return rules.length
 }

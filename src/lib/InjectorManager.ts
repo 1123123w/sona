@@ -1,18 +1,18 @@
 /**
- * InjectorManager - 集中式注入管理器
+ * InjectorManager - centralized injection manager
  *
- * 设计理念：一个全局 MutationObserver 守护所有注入任务。
+ * Design: one global MutationObserver guards all injection tasks.
  *
- * - 永不掉线：不调用 disconnect()，任何注入点被客户端刷掉后，
- *   下一次 DOM 变动时自动补回。
- * - 绝对流畅：整个插件只有一个 Observer，配合 requestAnimationFrame
- *   节流，一帧最多检查一次，不会因 Ember.js 的大量 DOM 变动而卡顿。
- * - 易于扩展：未来新增注入点只需 injector.register(task) 即可。
+ * - Persistent: never calls disconnect(), so removed injection points are
+ *   restored on the next DOM mutation.
+ * - Smooth: the whole plugin uses one Observer, throttled by requestAnimationFrame
+ *   to at most one check per frame.
+ * - Extensible: new injection points only need injector.register(task).
  */
 
 import { logger } from '@/index'
 
-/** 注入任务：返回 true 表示注入成功/已存在，false 表示还没找到位置 */
+/** Injection task: returns true when injected/already present, false when the target is not ready. */
 type InjectTask = () => boolean
 
 class InjectorManager {
@@ -21,8 +21,8 @@ class InjectorManager {
   private isThrottled = false
 
   /**
-   * 注册一个新的注入任务
-   * 注册后立即尝试执行一次
+   * Register a new injection task.
+   * Runs once immediately after registration.
    */
   register(task: InjectTask) {
     this.tasks.add(task)
@@ -34,15 +34,15 @@ class InjectorManager {
   }
 
   /**
-   * 取消注册一个注入任务
+   * Unregister an injection task.
    */
   unregister(task: InjectTask) {
     this.tasks.delete(task)
   }
 
   /**
-   * 启动全局 DOM 守护者
-   * 只会启动一次，重复调用无效
+   * Start the global DOM guard.
+   * Starts once; repeated calls are ignored.
    */
   start() {
     if (this.observer) return
@@ -72,7 +72,7 @@ class InjectorManager {
   }
 
   /**
-   * 停止全局守护（一般不需要调用）
+   * Stop the global DOM guard. Usually not needed.
    */
   stop() {
     if (this.observer) {
@@ -83,5 +83,5 @@ class InjectorManager {
   }
 }
 
-/** 全局注入管理器单例 */
+/** Global injector manager singleton. */
 export const injector = new InjectorManager()

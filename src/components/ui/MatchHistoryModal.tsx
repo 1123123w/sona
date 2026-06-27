@@ -6,18 +6,18 @@ import { getChampIcon, getItemIcon, getSpellIcon, getPerkIcon, getPerkStyleIcon,
 import type { SgpGameSummaryLol, SgpParticipantLol } from '@/types/sgp'
 import '@/styles/MatchHistoryModal.css'
 
-// ==================== 数据解析 ====================
+// ==================== Data Parsing ====================
 
 function formatK(value: number): string {
   return value >= 1000 ? `${(value / 1000).toFixed(1)}k` : String(value)
 }
 
-/** 将 UTC 时间戳格式化为本地友好格式：今天/昨天/前天 HH:MM，更远则显示日期 */
+/** Format a UTC timestamp as a local-friendly label. */
 function formatDate(timestamp: number): string {
   const date = new Date(timestamp)
   const now = new Date()
 
-  // 取本地日期的零点，用于比较天数差
+  // Use local midnight to compare day offsets.
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const target = new Date(date.getFullYear(), date.getMonth(), date.getDate())
   const diffDays = Math.round((today.getTime() - target.getTime()) / (1000 * 60 * 60 * 24))
@@ -52,13 +52,13 @@ interface MatchRowData {
   gameCreation: number
 }
 
-/** 从 SGP 对局数据中解析指定玩家的战绩行 */
+/** Parse one player's match-history row from SGP game data. */
 function parseSgpMatch(game: SgpGameSummaryLol, puuid: string): MatchRowData | null {
   const json = game.json
   const participant = json.participants.find((p: SgpParticipantLol) => p.puuid === puuid)
   if (!participant) return null
 
-  // mapId=12 的地图有多个皮肤变体，通过 gameModeMutators 区分
+  // mapId=12 has multiple map skin variants, distinguished by gameModeMutators.
   let mapName = getMapName(json.mapId)
   if (json.mapId === 12) {
     const mutator = json.gameModeMutators?.[0]
@@ -67,7 +67,7 @@ function parseSgpMatch(game: SgpGameSummaryLol, puuid: string): MatchRowData | n
     else mapName = '嚎哭深渊'
   }
 
-  // SGP 的符文结构：perks.styles[0] = 主系, styles[1] = 副系
+  // SGP rune layout: perks.styles[0] is primary, styles[1] is secondary.
   const primaryStyle = participant.perks?.styles?.[0]
   const subStyle = participant.perks?.styles?.[1]
   const perk0 = primaryStyle?.selections?.[0]?.perk ?? 0
@@ -96,7 +96,7 @@ function parseSgpMatch(game: SgpGameSummaryLol, puuid: string): MatchRowData | n
   }
 }
 
-// ==================== 组件 ====================
+// ==================== Component ====================
 
 function MatchRow({ match, onOpenDetail }: { match: MatchRowData; onOpenDetail: (gameId: number) => void }) {
   const statusClass = match.win ? 'smh-win' : 'smh-loss'
@@ -198,15 +198,15 @@ export interface MatchHistoryModalProps {
   onClose: () => void
   puuid: string
   playerName: string
-  /** 可选：默认过滤的队列 ID，不传则查全部模式 */
+  /** Optional default queue filter. Query all modes when omitted. */
   queueId?: number
 }
 
 /**
- * 战绩弹窗
+ * Match-history modal.
  *
- * 使用 SGP 接口查询战绩，支持通过 tag 参数按队列模式服务端过滤。
- * 下拉切换模式时会重新请求 SGP，而非前端过滤。
+ * Queries match history through SGP and supports server-side queue filtering by tag.
+ * Switching the mode dropdown sends a new SGP request instead of filtering locally.
  */
 export function MatchHistoryModal({ open, onClose, puuid, playerName, queueId: defaultQueueId }: MatchHistoryModalProps) {
   const [matches, setMatches] = useState<MatchRowData[]>([])
@@ -225,14 +225,14 @@ export function MatchHistoryModal({ open, onClose, puuid, playerName, queueId: d
   const INITIAL_FETCH = 20
   const MORE_FETCH = 20
 
-  // 可玩队列缓存
+  // Playable queue cache.
   const [queueOptions, setQueueOptions] = useState<{ id: number; name: string }[]>([])
   useEffect(() => {
     const all = getPlayableQueues()
     setQueueOptions(all)
   }, [])
 
-  // 点击外部关闭下拉框
+  // Close dropdown on outside click.
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (filterRef.current && !filterRef.current.contains(e.target as Node)) setFilterOpen(false)
@@ -241,7 +241,7 @@ export function MatchHistoryModal({ open, onClose, puuid, playerName, queueId: d
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  // 首次拉取战绩（SGP 服务端过滤）
+  // Initial match-history fetch with SGP server-side filtering.
   const loadMatches = useCallback(async (queueId: number) => {
     setLoading(true)
     setError('')
@@ -262,7 +262,7 @@ export function MatchHistoryModal({ open, onClose, puuid, playerName, queueId: d
         .filter((m): m is MatchRowData => m !== null)
       setMatches(parsed)
       nextStartIndex.current = INITIAL_FETCH
-      // 返回数量少于请求数量，说明没有更多了
+      // Fewer results than requested means there are no more pages.
       if (games.length < INITIAL_FETCH) setHasMore(false)
     } catch {
       setError('查询战绩失败')
@@ -271,7 +271,7 @@ export function MatchHistoryModal({ open, onClose, puuid, playerName, queueId: d
     }
   }, [puuid])
 
-  // 加载更多
+  // Load more.
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return
     setLoadingMore(true)
@@ -291,20 +291,20 @@ export function MatchHistoryModal({ open, onClose, puuid, playerName, queueId: d
       nextStartIndex.current += games.length
       if (games.length < MORE_FETCH) setHasMore(false)
     } catch {
-      // 加载更多失败静默，不影响已展示数据
+      // Ignore load-more failures so existing results stay visible.
     } finally {
       setLoadingMore(false)
     }
   }, [puuid, filterQueueId, loadingMore, hasMore])
 
-  // 用 ref 稳定回调，避免 loadMore 变化导致 scroll listener 反复重绑
+  // Keep the callback stable to avoid rebinding the scroll listener when loadMore changes.
   const loadMoreRef = useRef(loadMore)
   loadMoreRef.current = loadMore
 
-  // 滚动到底部触发加载更多
+  // Trigger load-more when scrolled to the bottom.
   useEffect(() => {
     if (!open) return
-    // 等 Modal DOM 渲染后再绑定
+    // Wait for the Modal DOM to render before binding.
     const raf = requestAnimationFrame(() => {
       const el = listRef.current
       if (!el) return
@@ -315,7 +315,7 @@ export function MatchHistoryModal({ open, onClose, puuid, playerName, queueId: d
         }
       }
       el.addEventListener('scroll', handleScroll, { passive: true })
-      // 清理函数存在 closure 里
+      // Cleanup lives in this closure.
       cleanupScroll.current = () => el.removeEventListener('scroll', handleScroll)
     })
 
@@ -326,7 +326,7 @@ export function MatchHistoryModal({ open, onClose, puuid, playerName, queueId: d
     }
   }, [open])
 
-  // 初始加载 / 当 puuid 或 defaultQueueId 变化时重新加载
+  // Initial load, then reload when puuid or defaultQueueId changes.
   useEffect(() => {
     if (!open || !puuid) return
     const key = `${puuid}-${defaultQueueId ?? 0}`
@@ -336,7 +336,7 @@ export function MatchHistoryModal({ open, onClose, puuid, playerName, queueId: d
     loadMatches(defaultQueueId ?? 0)
   }, [open, puuid, defaultQueueId, loadMatches])
 
-  // 下拉切换模式 → 重新请求 SGP
+  // Mode dropdown change: request SGP again.
   const handleFilterChange = (queueId: number) => {
     setFilterQueueId(queueId)
     setFilterOpen(false)

@@ -1,6 +1,6 @@
 /**
- * 模态窗口状态管理
- * 纯状态逻辑，零 DOM 操作，可被任何模块安全 import。
+ * Modal visibility state.
+ * Pure state logic with no DOM work, safe to import from any module.
  */
 
 import { store } from '@/lib/store'
@@ -30,8 +30,8 @@ export function toggleModal() {
 }
 
 /**
- * 监听模态窗口可见性变化
- * @returns 取消监听的函数
+ * Subscribe to modal visibility changes.
+ * @returns Unsubscribe function.
  */
 export function onModalVisibilityChange(fn: VisibilityListener) {
   listeners.add(fn)
@@ -40,7 +40,7 @@ export function onModalVisibilityChange(fn: VisibilityListener) {
   }
 }
 
-// ==================== 快捷键 ====================
+// ==================== Hotkeys ====================
 
 let currentHotkey = ''
 
@@ -53,7 +53,7 @@ function onKeyDown(e: KeyboardEvent) {
 }
 
 /**
- * 注册全局快捷键，并监听 store 变化自动换绑
+ * Register the global hotkey and rebind it when store settings change.
  */
 export function registerHotkey() {
   currentHotkey = store.get('hotkey')

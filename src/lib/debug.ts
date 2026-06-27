@@ -1,5 +1,9 @@
 import { getRecentSonaLogs } from '@/lib/logger'
 import {
+  getOfficialEntryHidingDebug,
+  refreshOfficialEntryHiding,
+} from '@/lib/injections'
+import {
   getHighRiskSettingDefinitions,
   HIGH_RISK_CONFIG_SETTING_KEYS,
   HIGH_RISK_FEATURE_SETTING_KEYS,
@@ -21,6 +25,12 @@ const FEATURE_KEYS: ConfigKey[] = [
   'enhancedFriendGameStatus',
   'lobbyEnhancement',
   'hideTFT',
+  'gameModeFilter',
+  'hideTFTPlayCard',
+  'hideSummonerRiftModes',
+  'hideAramMode',
+  'hideArenaMode',
+  'hideCustomGameSection',
   'hideRightNavText',
   'autoHonor',
   'autoLockChampion',
@@ -29,6 +39,7 @@ const FEATURE_KEYS: ConfigKey[] = [
   'champSelectQuitButton',
   'gameAnalysisPopup',
   'autoReturnToLobby',
+  'restReminderEnabled',
   'developerMode',
 ]
 
@@ -43,8 +54,11 @@ const CONFIG_KEYS: ConfigKey[] = [
   'lobbyEnhancementFetchCount',
   'autoLockInstant',
   'autoReturnMode',
+  'restReminderAcceptLimit',
+  'restReminderAcceptCount',
   'language',
   'hotkey',
+  'hiddenGameModes',
   'ignoreProfilePrivacy',
   'unlockStatus',
   'unlockAvailability',
@@ -124,7 +138,7 @@ function readOpggSummary() {
   return {
     enabled: readBoolean(opgg, 'enabled'),
     hasChampSelectListener: readBoolean(opgg, 'hasChampSelectListener'),
-    hasRunePagesListener: readBoolean(opgg, 'hasRunePagesListener'),
+    hasRunePagePollTimer: readBoolean(opgg, 'hasRunePagePollTimer'),
     injectRegistered: readBoolean(opgg, 'injectRegistered'),
     rearmActive: readBoolean(opgg, 'rearmActive'),
     currentChampionLocked: readBoolean(opgg, 'currentChampionLocked'),
@@ -219,6 +233,19 @@ export function installCoreDebugHandles() {
       default: definition.default,
     })),
   }))
+
+  registerDebugHandle('officialEntries', () => ({
+    updatedAt: Date.now(),
+    ...getOfficialEntryHidingDebug(),
+  }))
+
+  registerDebugHandle('refreshOfficialEntries', () => {
+    refreshOfficialEntryHiding()
+    return {
+      updatedAt: Date.now(),
+      ...getOfficialEntryHidingDebug(),
+    }
+  })
 
   registerDebugHandle('config', () => ({
     updatedAt: Date.now(),

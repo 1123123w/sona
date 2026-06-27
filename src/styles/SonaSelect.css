@@ -1,4 +1,4 @@
-/* Sona Select - 海克斯风格下拉菜单 */
+/* Sona Select */
 
 .sonaenhance-select {
   position: relative;
@@ -6,7 +6,7 @@
   z-index: 100;
 }
 
-/* 触发按钮 */
+/* Trigger */
 .sonaenhance-select-trigger {
   display: flex;
   align-items: center;
@@ -62,7 +62,7 @@
   color: #c8aa6e;
 }
 
-/* 下拉列表 */
+/* Dropdown */
 .sonaenhance-select-dropdown {
   position: absolute;
   z-index: 50;
@@ -93,7 +93,7 @@
   background: #785a28;
 }
 
-/* 选项 */
+/* Option */
 .sonaenhance-select-option {
   display: flex;
   align-items: center;

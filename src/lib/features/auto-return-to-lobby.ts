@@ -3,8 +3,9 @@ import { store } from '@/lib/store'
 import { lcu, LcuEventUri } from '@/lib/lcu'
 import type { LCUEventMessage, GameflowPhase } from '@/lib/lcu'
 import { sleep } from '@/lib/utils'
+import { isRestReminderPaused } from '@/lib/features/auto-accept'
 
-// ==================== 对局结束自动返回房间 ====================
+// ==================== Auto Return To Lobby ====================
 
 let autoReturnUnsub: (() => void) | null = null
 
@@ -17,16 +18,21 @@ export function updateAutoReturnToLobby(enabled: boolean) {
         const mode = store.get('autoReturnMode')
         logger.info('[AutoReturn] 检测到对局结束，准备执行自动返回流程...')
 
-        // 延迟等待：刚进入结算时，服务器可能还在结算荣誉，给点缓冲时间
+        // Delay briefly because honors may still be settling when entering post-game.
         await sleep(2000);
 
         try {
-          // 统一使用 playAgain 重建房间
+          // Use playAgain to rebuild the lobby consistently.
           await lcu.playAgain()
           logger.info('[AutoReturn] 已通过 play-again 重建房间（已保留原队伍结构）✓')
 
-          // 自动排队模式：额外调用 startMatchmaking（带重试，队友可能还没准备好）
+          // Auto-queue mode: also call startMatchmaking with retry because teammates may not be ready yet.
           if (mode === 'queue') {
+            if (isRestReminderPaused()) {
+              logger.info('[AutoReturn] 提醒休息暂停中，仅返回房间，不自动开始匹配')
+              return
+            }
+
             logger.info('[AutoReturn] 当前模式为自动排队，准备启动匹配引擎...')
             const MAX_RETRIES = 15
             for (let i = 1; i <= MAX_RETRIES; i++) {

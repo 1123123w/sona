@@ -1,8 +1,8 @@
 /**
- * 英雄选择网格 T 级角标
+ * Champ-select grid tier badge.
  *
- * 在客户端英雄选择网格的 .champion-grid-champion-thumbnail 左上角展示
-gg * OP.GG 全英雄梯度数据（OP-T5）。跟随"英雄选择阶段增强"开关启用。
+ * Displays OP.GG all-champion tier data (OP-T5) on the top-left of
+ * .champion-grid-champion-thumbnail. Follows the champ-select assist toggle.
  */
 
 import { logger } from '@/index'

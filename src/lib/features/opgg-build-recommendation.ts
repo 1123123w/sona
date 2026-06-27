@@ -1,10 +1,10 @@
 /**
- * OP.GG 配装推荐基础框架
+ * OP.GG build recommendation foundation.
  *
- * 目标：
- * - 只在 ChampSelect 阶段启用
- * - 接管选好英雄后出现的 `.champion-select-ability-previews-show` 点击事件
- * - 根据英雄 / 队列 / 版本上下文拉取 OP.GG 推荐数据
+ * Goals:
+ * - Enable only during ChampSelect.
+ * - Take over clicks on `.champion-select-ability-previews-show` after champion selection.
+ * - Fetch OP.GG recommendation data from champion / queue / version context.
  */
 
 import { logger } from '@/index'
@@ -13,7 +13,7 @@ import { registerDebugHandle } from '@/lib/debug'
 import { createElement } from 'react'
 import { flushSync } from 'react-dom'
 import { createRoot, type Root } from 'react-dom/client'
-import { getAllChampions, getAugmentInfo, getChampionById, getQueue, getQueueName } from '@/lib/assets'
+import { getAllChampions, getAugmentInfo, getChampionById, getItemInfo, getQueue, getQueueName } from '@/lib/assets'
 import type { BuildRecommendation, RecommendationContext } from '@/components/ui/OpggBuildRecommendationPanel'
 import { applyOpggRunePage } from '@/lib/opgg-runes'
 import { lcu, LcuEventUri, type ChampSelectSession, type ItemSet, type ItemSetBlock, type LCUEventMessage, type RunePage, type RunePagePayload } from '@/lib/lcu'
@@ -41,11 +41,13 @@ const DEFAULT_OPGG_TIER: OpggTier = 'master_plus'
 const SONA_ITEM_SET_TITLE_PREFIX = '[Sona-E]'
 const HEALTH_POTION_ID = 2003
 const ITEM_SET_ASSOCIATED_MAPS = [11, 12, 30]
-const RUNE_PAGES_EVENT_URI = '/lol-perks/v1/pages'
 const RUNE_APPLY_SUPPRESS_MS = 1500
+const RUNE_PAGE_POLL_INTERVAL_MS = 1000
+const RUNE_SAVE_CHAT_DEDUPE_MS = 2000
 const SPELL_APPLY_SUPPRESS_MS = 1500
 const SMART_LOADOUT_RESTORE_DEBOUNCE_MS = 500
 const CHAMP_SELECT_REARM_INTERVAL_MS = 1000
+const RANKED_ALL_POSITIONS: OpggPosition[] = ['top', 'jungle', 'mid', 'adc', 'support']
 const SELECTABLE_OPGG_TIERS: OpggTier[] = [
   'all',
   'challenger',
@@ -78,7 +80,7 @@ const MAX_RECOMMENDATION_CACHE_SIZE = 8
 
 let phaseUnsub: (() => void) | null = null
 let champSelectUnsub: (() => void) | null = null
-let runePagesUnsub: (() => void) | null = null
+let runePagePollTimer: number | null = null
 let injectRegistered = false
 let currentContext: RecommendationContext = {
   championId: 0,
@@ -105,6 +107,10 @@ let smartLoadoutRestoreTimer: number | null = null
 let cacheClearListenerInstalled = false
 let opggPanelLoadPromise: Promise<typeof import('@/components/ui/OpggBuildRecommendationPanel')['OpggBuildRecommendationPanel']> | null = null
 let pendingSmartLoadoutContext: RecommendationContext | null = null
+let lastPolledRuneKey = ''
+let lastPolledRuneSignature = ''
+let lastRuneSaveChatSignature = ''
+let lastRuneSaveChatAt = 0
 let lastObservedSpellKey = ''
 let lastObservedSpellSignature = ''
 const itemSetSyncInFlightKeys = new Set<string>()
@@ -139,7 +145,7 @@ function getOpggDebugSnapshot() {
   return {
     enabled: Boolean(phaseUnsub),
     hasChampSelectListener: Boolean(champSelectUnsub),
-    hasRunePagesListener: Boolean(runePagesUnsub),
+    hasRunePagePollTimer: runePagePollTimer != null,
     injectRegistered,
     rearmActive: rearmTimer != null,
     currentContext: { ...currentContext },
@@ -404,6 +410,13 @@ function sortItemBuildsByWinRate(builds: OpggItemBuild[]): OpggItemBuild[] {
   })
 }
 
+function sortItemIdsByPriceDesc(itemIds: number[]): number[] {
+  return normalizeItemIds(itemIds).sort((a, b) => {
+    const priceDiff = getItemInfo(b).price - getItemInfo(a).price
+    return priceDiff || a - b
+  })
+}
+
 function createItemSetBlock(type: string, itemIds: number[]): ItemSetBlock | null {
   const ids = normalizeItemIds(itemIds)
   if (ids.length === 0) return null
@@ -437,17 +450,17 @@ function buildItemSetBlocks(recommendation: BuildRecommendation): ItemSetBlock[]
     appendItemSetBlock(blocks, `${blocks.length + 1}. 棱彩装备`, flattenItemBuilds(prismItems))
   }
 
-  coreItems.slice(0, 3).forEach((build, index) => {
+  coreItems.slice(0, 5).forEach((build, index) => {
     appendItemSetBlock(blocks, `${blocks.length + 1}. 核心装 ${index + 1}`, build.ids)
   })
 
-  appendItemSetBlock(blocks, `${blocks.length + 1}. 后续装备`, flattenItemBuilds(lastItems))
+  appendItemSetBlock(blocks, `${blocks.length + 1}. 后续装备`, sortItemIdsByPriceDesc(flattenItemBuilds(lastItems)))
 
   return blocks
 }
 
 function getManagedItemSetUid(context: RecommendationContext): string {
-  return `sonaenhance-${context.championId}`
+  return ['sonaenhance', context.championId, resolveOpggMode(context), context.position].join('-')
 }
 
 function getChampionName(championId: number): string {
@@ -511,8 +524,16 @@ function createManagedItemSet(context: RecommendationContext, recommendation: Bu
 }
 
 function isSameManagedItemSetContext(itemSet: ItemSet, nextItemSet: ItemSet): boolean {
-  if (itemSet.uid === nextItemSet.uid) return true
-  return itemSet.title === nextItemSet.title
+  return itemSet.uid === nextItemSet.uid
+}
+
+function shouldExpandAllPositions(context: RecommendationContext): boolean {
+  return resolveOpggMode(context) === 'ranked' && context.position === 'none'
+}
+
+function getItemSetContexts(context: RecommendationContext): RecommendationContext[] {
+  if (!shouldExpandAllPositions(context)) return [context]
+  return RANKED_ALL_POSITIONS.map((position) => ({ ...context, position }))
 }
 
 function isCurrentRecommendationContext(context: RecommendationContext): boolean {
@@ -531,6 +552,13 @@ function saveCurrentSmartRunePage(page: RunePage): void {
 
   const runeKey = getSmartRuneKey(currentContext)
   if (!runeKey) return
+  const signature = getRunePageSignature(page)
+  if (lastPolledRuneKey !== runeKey) {
+    lastPolledRuneKey = runeKey
+    lastPolledRuneSignature = signature
+    return
+  }
+  if (lastPolledRuneSignature === signature) return
 
   const pages = { ...store.get('smartRunePages') }
   pages[runeKey] = {
@@ -540,7 +568,9 @@ function saveCurrentSmartRunePage(page: RunePage): void {
     updatedAt: Date.now(),
   }
   store.set('smartRunePages', pages)
+  lastPolledRuneSignature = signature
   logger.info('[OPGG] 已保存智能符文 → key=%s, page=%s', runeKey, getSmartRunePageName(currentContext))
+  notifySmartRuneSaved(currentContext, signature)
 }
 
 function saveCurrentSmartSummonerSpells(player: ChampSelectSession['myTeam'][number], context: RecommendationContext): void {
@@ -575,16 +605,61 @@ function saveCurrentSmartSummonerSpells(player: ChampSelectSession['myTeam'][num
   logger.info('[OPGG] 已保存智能召唤师技能 → key=%s, spells=%s', spellKey, signature)
 }
 
-function handleRunePageEvent(event: LCUEventMessage): void {
-  if (event.eventType !== 'Create' && event.eventType !== 'Update') return
-  const page = event.data as RunePage | null
-  if (!page || typeof page !== 'object') return
+function getRunePageSignature(page: Pick<RunePagePayload, 'primaryStyleId' | 'subStyleId' | 'selectedPerkIds'>): string {
+  return [page.primaryStyleId, page.subStyleId, ...page.selectedPerkIds].join(':')
+}
+
+function getCurrentRunePage(pages: RunePage[]): RunePage | null {
+  return pages.find((page) => page.current || page.isActive) ?? pages[0] ?? null
+}
+
+function notifySmartRuneSaved(context: RecommendationContext, signature: string): void {
+  const now = Date.now()
+  const chatSignature = `${getSmartRuneKey(context) ?? ''}:${signature}`
+  if (lastRuneSaveChatSignature === chatSignature && now - lastRuneSaveChatAt < RUNE_SAVE_CHAT_DEDUPE_MS) return
+
+  lastRuneSaveChatSignature = chatSignature
+  lastRuneSaveChatAt = now
+  lcu.sendChampSelectMessage(`${getChampionName(context.championId)} ${getContextModeLabel(context)} 符文已保存 - Sona-E`, 'celebration').catch((err) => {
+    logger.warn('[OPGG] 智能符文保存聊天提示发送失败:', err)
+  })
+}
+
+async function pollCurrentRunePage(): Promise<void> {
+  if (!store.get(SETTING_KEYS.smartBuildRecommendation)) return
+  if (!currentChampionLocked || currentContext.championId <= 0) return
+  if (Date.now() < suppressRuneSaveUntil) return
+
+  const pages = await lcu.getRunePages().catch((err) => {
+    logger.debug('[OPGG] 轮询当前符文页失败: %o', err)
+    return []
+  })
+  const page = getCurrentRunePage(pages)
+  if (!page) return
   saveCurrentSmartRunePage(page)
 }
 
+function startRunePagePolling(): void {
+  if (runePagePollTimer != null) return
+  runePagePollTimer = window.setInterval(() => {
+    pollCurrentRunePage().catch((err) => {
+      logger.warn('[OPGG] 智能符文轮询失败:', err)
+    })
+  }, RUNE_PAGE_POLL_INTERVAL_MS)
+  void pollCurrentRunePage()
+}
+
+function stopRunePagePolling(): void {
+  if (runePagePollTimer == null) return
+  window.clearInterval(runePagePollTimer)
+  runePagePollTimer = null
+}
+
 async function upsertRecommendedItemSet(context: RecommendationContext, recommendation: BuildRecommendation): Promise<void> {
-  const nextItemSet = createManagedItemSet(context, recommendation)
-  if (!nextItemSet) {
+  const nextItemSets = getItemSetContexts(context)
+    .map((itemSetContext) => createManagedItemSet(itemSetContext, recommendation))
+    .filter((itemSet): itemSet is ItemSet => itemSet != null)
+  if (nextItemSets.length === 0) {
     logger.warn('[OPGG] 装备集生成失败：没有可写入的装备 block')
     return
   }
@@ -592,15 +667,15 @@ async function upsertRecommendedItemSet(context: RecommendationContext, recommen
   const summoner = await lcu.getSummonerInfo()
   const wrapper = await lcu.getItemSets(summoner.summonerId)
   const existingItemSets = Array.isArray(wrapper?.itemSets) ? wrapper.itemSets : []
-  const itemSets = existingItemSets.filter((itemSet) => !isSameManagedItemSetContext(itemSet, nextItemSet))
+  const itemSets = existingItemSets.filter((itemSet) => !nextItemSets.some((nextItemSet) => isSameManagedItemSetContext(itemSet, nextItemSet)))
 
   await lcu.putItemSets(summoner.summonerId, {
     accountId: wrapper?.accountId ?? summoner.accountId ?? 0,
-    itemSets: [...itemSets, nextItemSet],
+    itemSets: [...itemSets, ...nextItemSets],
     timestamp: Date.now(),
   })
 
-  logger.info('[OPGG] 自动装备集已同步：%s，blocks=%d', nextItemSet.title, nextItemSet.blocks.length)
+  logger.info('[OPGG] 自动装备集已同步：%d 个', nextItemSets.length)
   const championName = getChampionName(context.championId)
   lcu.sendChampSelectMessage(`${championName} 出装已配备 - Sona-E`, 'celebration').catch((err) => {
     logger.warn('[OPGG] 自动装备集聊天提示发送失败:', err)
@@ -611,7 +686,7 @@ function syncRecommendedItemSetWhenReady(entry: RecommendationCacheEntry): void 
   if (!store.get(SETTING_KEYS.smartBuildRecommendation)) return
   if (!currentChampionLocked) return
 
-  const syncKey = getManagedItemSetUid(entry.context)
+  const syncKey = getItemSetContexts(entry.context).map(getManagedItemSetUid).join('|')
   if (lastAppliedItemSetKey === syncKey || itemSetSyncInFlightKeys.has(syncKey)) return
 
   itemSetSyncInFlightKeys.add(syncKey)
@@ -722,6 +797,8 @@ async function applySavedSmartRunePage(context: RecommendationContext): Promise<
       selectedPerkIds: [...saved.selectedPerkIds],
     })
     lastAppliedRuneKey = runeKey
+    lastPolledRuneKey = runeKey
+    lastPolledRuneSignature = getRunePageSignature(saved)
     logger.info('[OPGG] 已自动应用智能符文 → key=%s, page=%s', runeKey, pageName)
     return true
   } finally {
@@ -1093,7 +1170,7 @@ function getRecommendationMeta(champion: OpggChampion): BuildRecommendation['met
   return {
     rank,
     previousRank,
-    // 排名数字越小越强：从 #80 到 #60 记为上升 20。
+    // Lower rank numbers are stronger: #80 to #60 is an improvement of 20.
     rankDelta: rank != null && previousRank != null ? previousRank - rank : null,
     totalRank,
     matchCount: champion.meta.match_count ?? null,
@@ -1384,6 +1461,7 @@ function mount() {
     logger.info('[OPGG] 已检测到本地英雄，开始接管技能预览入口')
   }
   startRearmTimer()
+  startRunePagePolling()
 }
 
 function startRearmTimer() {
@@ -1420,6 +1498,7 @@ function unmountPanel() {
 
 function unmount(resetContext = true) {
   unmountPanel()
+  stopRunePagePolling()
   if (resetContext) {
     currentContext = {
       championId: 0,
@@ -1439,6 +1518,10 @@ function unmount(resetContext = true) {
     smartLoadoutRestoreTimer = null
   }
   pendingSmartLoadoutContext = null
+  lastPolledRuneKey = ''
+  lastPolledRuneSignature = ''
+  lastRuneSaveChatSignature = ''
+  lastRuneSaveChatAt = 0
   lastObservedSpellKey = ''
   lastObservedSpellSignature = ''
   itemSetSyncInFlightKeys.clear()
@@ -1466,8 +1549,6 @@ export function updateOpggBuildRecommendation(enabled: boolean) {
       refreshContext(event.data as ChampSelectSession)
     })
 
-    runePagesUnsub = lcu.observe(RUNE_PAGES_EVENT_URI, handleRunePageEvent)
-
     lcu.getGameflowPhase().then((phase) => {
       if (phase === 'ChampSelect') {
         mount()
@@ -1489,10 +1570,6 @@ export function updateOpggBuildRecommendation(enabled: boolean) {
     if (champSelectUnsub) {
       champSelectUnsub()
       champSelectUnsub = null
-    }
-    if (runePagesUnsub) {
-      runePagesUnsub()
-      runePagesUnsub = null
     }
     unmount()
     logger.info('[OPGG] 配装推荐接管已禁用')

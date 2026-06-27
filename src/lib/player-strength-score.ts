@@ -37,7 +37,7 @@ export interface SonaGameStrengthScore {
   role: SonaStrengthRole
   win: boolean
   placement: number
-  /** WeGame 风格展示分，约 3.0 - 19.9。 */
+  /** WeGame-style display score, approximately 3.0 - 19.9. */
   score: number
   breakdown: SonaScoreBreakdown
   metrics: {
@@ -55,9 +55,9 @@ export interface SonaGameStrengthScore {
 
 export interface SonaPlayerStrengthScore {
   puuid: string
-  /** WeGame 风格综合展示分，约 3.0 - 19.9。 */
+  /** WeGame-style combined display score, approximately 3.0 - 19.9. */
   score: number
-  /** 未经过样本置信度、稳定性和趋势修正的原始展示分。 */
+  /** Raw display score before sample confidence, stability, and trend adjustments. */
   rawScore: number
   confidence: number
   validGames: number
@@ -85,15 +85,15 @@ export interface SonaTeamStrengthScore {
 }
 
 export interface SonaStrengthScoreOptions {
-  /** 最近战绩权重半衰期。SGP 通常按新到旧返回，越靠前权重越高。 */
+  /** Recent match weight half-life. SGP usually returns newest matches first. */
   recencyHalfLife: number
-  /** 低于该样本数时仍计算，但会明显向中性分收缩。 */
+  /** Below this sample count, still calculate but shrink strongly toward neutral. */
   minConfidenceGames: number
-  /** 达到该样本数后视为满置信度。 */
+  /** Sample count treated as full confidence. */
   fullConfidenceGames: number
-  /** 样本足够时削弱极端局，避免一两场超神/爆炸扭曲评分。 */
+  /** Downweight extreme games once enough samples exist. */
   trimOutliers: boolean
-  /** 早期投降局数据不完整，默认跳过。 */
+  /** Early surrender games often have incomplete data, so skip them by default. */
   skipEarlySurrender: boolean
 }
 

@@ -1,6 +1,6 @@
 /* Sona Modal Styles */
 
-/* 入场动画 */
+/* Enter animation */
 @keyframes sonaenhance-modal-overlay-in {
   from { opacity: 0; }
   to   { opacity: 1; }
@@ -17,7 +17,7 @@
   }
 }
 
-/* 退场动画 */
+/* Exit animation */
 @keyframes sonaenhance-modal-overlay-out {
   from { opacity: 1; }
   to   { opacity: 0; }
@@ -34,7 +34,7 @@
   }
 }
 
-/* 遮罩层 */
+/* Backdrop */
 .sonaenhance-modal-overlay {
   position: fixed;
   inset: 0;
@@ -48,13 +48,13 @@
   pointer-events: auto;
 }
 
-/* 遮罩层退场 */
+/* Backdrop exit */
 .sonaenhance-modal-overlay.sonaenhance-modal-closing {
   animation: sonaenhance-modal-overlay-out 0.2s ease-in forwards;
   pointer-events: none;
 }
 
-/* 对话框容器 */
+/* Dialog container */
 .sonaenhance-modal-dialog {
   position: relative;
   display: flex;
@@ -72,12 +72,12 @@
   max-height: 92vh;
 }
 
-/* 对话框退场 */
+/* Dialog exit */
 .sonaenhance-modal-dialog.sonaenhance-modal-closing {
   animation: sonaenhance-modal-dialog-out 0.2s ease-in forwards;
 }
 
-/* 顶部边框装饰线 */
+/* Top border accent */
 .sonaenhance-modal-dialog::before {
   content: '';
   position: absolute;
@@ -94,7 +94,7 @@
   z-index: 1;
 }
 
-/* 关闭按钮 — 悬浮右上角 */
+/* Floating top-right close button */
 .sonaenhance-modal-close {
   position: absolute;
   top: 10px;
@@ -124,7 +124,7 @@
   transform: scale(0.9);
 }
 
-/* Body — 占满整个 dialog */
+/* Body fills the dialog. */
 .sonaenhance-modal-body {
   position: relative;
   z-index: 1;

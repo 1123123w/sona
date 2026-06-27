@@ -2,7 +2,7 @@ import { logger } from '@/index'
 import { lcu, LcuEventUri } from '@/lib/lcu'
 import type { LCUEventMessage, GameflowPhase } from '@/lib/lcu'
 
-// ==================== 调试：Gameflow 阶段日志 ====================
+// ==================== Debug: Gameflow Phase Logs ====================
 
 let debugGameflowUnsub: (() => void) | null = null
 
@@ -40,7 +40,7 @@ export function updateDebugGameflow(enabled: boolean) {
           }
           logger.info('完整 session: %o', session)
 
-          // 英雄选择阶段：拉取 champ select session 打印队友信息
+          // ChampSelect phase: fetch champ select session and print teammate info.
           if (phase === 'ChampSelect') {
             lcu.getChampSelectSession()
               .then((champSelect) => {

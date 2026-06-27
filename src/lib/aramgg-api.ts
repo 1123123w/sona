@@ -293,10 +293,10 @@ function readBalancedArrayLiteral(text: string, startIndex: number): string | nu
 }
 
 /**
- * 从 Next.js HTML 中提取 self.__next_f.push(...) 拼接出的 RSC 文本流。
+ * Extracts the RSC text stream assembled by self.__next_f.push(...) from Next.js HTML.
  *
- * ARAMGG 在普通 GET 下可能返回完整 HTML，而不是纯 RSC stream。后续解析只关心
- * push 数组的第二项字符串，因此这里先把这些 chunk 还原成纯 RSC 文本。
+ * ARAMGG may return full HTML for normal GET requests instead of a pure RSC stream.
+ * Later parsing only needs the second string item in each push array, so rebuild the RSC text first.
  */
 export function extractRscFromHtml(htmlRawText: string): string {
   let rscStream = ''
@@ -553,7 +553,7 @@ export class AramggDataApi {
       const response = await fetch(url.toString(), {
         method: 'GET',
         mode: 'cors',
-        //  为了避免触发CORS，不能加那么多请求头
+        // Keep headers minimal to avoid CORS failures.
         // credentials: 'include',
         // referrer: `${AramggDataApi.BASE_URL}/zh-CN`,
         // headers: {

@@ -1,25 +1,24 @@
 /**
- * 平衡性调整 buff 提示
+ * Balance adjustment tooltip.
  *
- * 游玩特定模式（大乱斗 / 无限火力 / 克隆大作战 / 极限闪击 / 斗魂竞技场 / 终极魔咒书）时，
- * 鼠标悬停在英雄头像上，显示对应的平衡数值调整。
+ * Shows mode-specific balance adjustments when hovering champion avatars in special modes.
  *
- * 设计思路：
- * - 复用客户端原生 <lol-uikit-tooltip> 组件获得原生风格
- * - hover 时直接从 DOM 元素的 background-image 提取 championId，实时查数据
- * - 无需缓存数组，不存在索引错位问题
- * - injector 守护注入点，客户端刷掉也会自动补回
+ * Design:
+ * - Reuse the client's native <lol-uikit-tooltip> for native styling.
+ * - Extract championId from DOM background-image on hover and query data live.
+ * - Avoid cached arrays so indices cannot drift.
+ * - Let the injector guard injection points and restore them after client rerenders.
  *
- * 数据源：Fandom LoL Wiki（字段用下划线命名，稀疏结构）
+ * Data source: LoL Wiki. Field names use underscores and sparse objects.
  */
 
 import { logger } from '@/index'
 import { lcu, LcuEventUri, type LCUEventMessage } from '@/lib/lcu'
 import type { GameflowPhase } from '@/types/lcu'
 import { injector } from '@/lib/InjectorManager'
-import { getChampionBalance, getQueueName, type BalanceMode, type ChampionBalanceStats } from '@/lib/assets'
+import { getAllChampions, getChampionBalance, getQueueName, type BalanceMode, type ChampionBalanceStats } from '@/lib/assets'
 
-// ==================== 图标资源（构建期内联为 base64） ====================
+// ==================== Icon Assets Inlined At Build Time ====================
 
 import iconDmgDealt from '@/../assets/balance-icons/dmg_dealt.png'
 import iconDmgTaken from '@/../assets/balance-icons/dmg_taken.png'
@@ -32,7 +31,7 @@ import iconEnergyRegen from '@/../assets/balance-icons/energy_regen.png'
 import iconManaRegen from '@/../assets/balance-icons/mana_regen.png'
 import iconMovementSpeed from '@/../assets/balance-icons/movement_speed.png'
 
-/** Wiki 字段名 → 图标资源 */
+/** Wiki field name to icon asset. */
 const ICON_MAP: Record<string, string> = {
   dmg_dealt: iconDmgDealt,
   dmg_taken: iconDmgTaken,
@@ -46,7 +45,7 @@ const ICON_MAP: Record<string, string> = {
   movement_speed: iconMovementSpeed,
 }
 
-/** Wiki 字段名 → 中文标签 */
+/** Wiki field name to localized label. */
 const LABEL_MAP: Record<string, string> = {
   dmg_dealt: '造成伤害',
   dmg_taken: '承受伤害',
@@ -60,7 +59,7 @@ const LABEL_MAP: Record<string, string> = {
   movement_speed: '移动速度',
 }
 
-/** 显示顺序（固定顺序比字典序好看） */
+/** Display order. A fixed order is more readable than dictionary order. */
 const DISPLAY_ORDER: Array<keyof ChampionBalanceStats> = [
   'dmg_dealt',
   'dmg_taken',
@@ -74,26 +73,26 @@ const DISPLAY_ORDER: Array<keyof ChampionBalanceStats> = [
   'energy_regen',
 ]
 
-// ==================== 模式映射 ====================
+// ==================== Mode Mapping ====================
 
 /**
- * LCU gameMode 字符串 → 平衡数据 key
- * 兼容各种变体（如 ARURF 走 urf 数据，KIWI 走 aram 数据）
- * 显示名直接用 getQueueName(queueId) 从 LCU 官方数据取，不在这里维护
+ * LCU gameMode string to balance-data key.
+ * Handles variants such as ARURF using urf data and KIWI using aram data.
+ * Display names come from LCU getQueueName(queueId), not from this map.
  */
 function getBalanceKey(gameMode: string): BalanceMode | null {
   const mode = gameMode.toLowerCase()
-  // ARAM 类：极地大乱斗、海克斯大乱斗等所有大乱斗变种
+  // ARAM family: all ARAM variants.
   if (mode === 'aram' || mode === 'kiwi') return 'aram'
-  // URF 类：URF / ARURF
+  // URF family: URF / ARURF.
   if (mode === 'urf' || mode === 'arurf') return 'urf'
-  // 克隆大作战
+  // One For All.
   if (mode === 'oneforall' || mode === 'ofa') return 'ofa'
-  // 极限闪击
+  // Nexus Blitz.
   if (mode === 'nexusblitz' || mode === 'nb') return 'nb'
-  // 斗魂竞技场（Arena）
+  // Arena.
   if (mode === 'cherry' || mode === 'arena') return 'ar'
-  // 终极魔咒书
+  // Ultimate Spellbook.
   if (mode === 'ultbook' || mode === 'usb') return 'usb'
   return null
 }
@@ -112,7 +111,7 @@ class BalanceTooltip {
     this.manager = manager
 
     const root = document.createElement('div')
-    // z-index 对齐 balance-buff-viewer 参考项目，压过客户端原生 tooltip（"点击以将你的选择替换为..."）
+    // Match the reference project's z-index so this tooltip stays above the native client tooltip.
     root.setAttribute('style', 'position:absolute;top:0;left:0;width:0;height:0;overflow:visible;z-index:19001;')
     this.root = root
 
@@ -121,7 +120,7 @@ class BalanceTooltip {
     root.appendChild(container)
     this.container = container
 
-    // 复用客户端原生 tooltip Web Component，自带小三角指示器 + 原生样式
+    // Reuse the native tooltip Web Component for its arrow indicator and native styling.
     const tooltip = document.createElement('lol-uikit-tooltip')
     tooltip.setAttribute('data-tooltip-position', 'right')
     container.appendChild(tooltip)
@@ -159,7 +158,7 @@ class BalanceTooltip {
       left = rect.right + 5
       top = rect.bottom - (rect.height + this.container.offsetHeight) / 2
     } else {
-      // bench 场景：完全盖住客户端原生 tooltip，那个没啥信息量
+      // Bench context: fully cover the native tooltip because it adds little useful information.
       top = rect.bottom
       left = rect.right - (rect.width + this.container.offsetWidth) / 2
     }
@@ -179,7 +178,7 @@ class BalanceTooltip {
   }
 }
 
-// ==================== 数据渲染 ====================
+// ==================== Data Rendering ====================
 
 /** 1.1 → "+10%"；0.95 → "-5%" */
 function ratioToText(n: number): string {
@@ -188,21 +187,21 @@ function ratioToText(n: number): string {
   return n >= 1 ? '+' + text : text
 }
 
-/** ability_haste 按加数显示，其他按倍率 */
+/** Show ability_haste as an additive value and other fields as multipliers. */
 function isAbilityHasteField(key: string): boolean {
   return key === 'ability_haste'
 }
 
-/** 判断是否为 buff（绿色）还是 nerf（红色） */
+/** Decide whether the value is a buff or nerf. */
 function isBuff(key: string, value: number): boolean {
-  if (key === 'dmg_taken') return value < 1   // 少受伤 = buff
-  if (isAbilityHasteField(key)) return value >= 0 // 技能急速是加数，正值为 buff
+  if (key === 'dmg_taken') return value < 1   // Less damage taken is a buff.
+  if (isAbilityHasteField(key)) return value >= 0 // Ability haste is additive; positive values are buffs.
   return value >= 1
 }
 
-/** 生成 buff 列表 HTML（Wiki 字段天然稀疏，传入的 stats 只有有调整的字段） */
+/** Generate the adjustment list HTML. Wiki stats are sparse and only include changed fields. */
 function buildStatsHtml(stats: ChampionBalanceStats): string {
-  // 按 DISPLAY_ORDER 排序
+  // Sort by DISPLAY_ORDER.
   const entries: Array<[string, number]> = []
   for (const key of DISPLAY_ORDER) {
     const value = stats[key]
@@ -219,7 +218,7 @@ function buildStatsHtml(stats: ChampionBalanceStats): string {
     const label = LABEL_MAP[key] ?? key
     const icon = ICON_MAP[key]
     const color = isBuff(key, value) ? '#5bbd72' : '#e84749'
-    // ability_haste 按加数显示（+N），其他按倍率显示（+N%）
+    // ability_haste is additive (+N); other fields are percentage multipliers (+N%).
     const text = isAbilityHasteField(key)
       ? (value >= 0 ? `+${value}` : `${value}`)
       : ratioToText(value)
@@ -239,22 +238,25 @@ function buildStatsHtml(stats: ChampionBalanceStats): string {
   return rows.join('')
 }
 
-// ==================== 主模块状态 ====================
+// ==================== Module State ====================
 
 let tooltip: BalanceTooltip | null = null
-/** 当前模式：dataKey 用于查平衡数据，displayName 直接用 getQueueName(queueId) 从 LCU 官方数据取 */
+/** Current mode. dataKey queries balance data; displayName comes from LCU getQueueName(queueId). */
 let currentMode: { dataKey: BalanceMode; displayName: string } | null = null
 let phaseUnsub: (() => void) | null = null
 let injectRegistered = false
+let cardHoverObserver: MutationObserver | null = null
+let lastCardDiag = ''
+let lastHoverChampId = -2
 
-// ==================== 数据渲染（hover 时按需调用） ====================
+// ==================== Data Rendering On Hover ====================
 
 function buildTooltipData(champId: number): { caption: string; content: string } | null {
   if (champId <= 0 || !currentMode) return null
   const balance = getChampionBalance(champId)
   if (!balance) return null
 
-  // Wiki 数据稀疏：没调整的模式根本不存在
+  // Wiki data is sparse: modes without adjustments are absent.
   const stats = balance.stats?.[currentMode.dataKey] ?? {}
   return {
     caption: `${currentMode.displayName} · 平衡调整`,
@@ -262,19 +264,24 @@ function buildTooltipData(champId: number): { caption: string; content: string }
   }
 }
 
-// ==================== DOM 绑定（幂等） ====================
+// ==================== Idempotent DOM Binding ====================
 
 const BOUND_ATTR = 'data-sonaenhance-balance-hover'
+const GRID_SELECTOR = [
+  '.champion-grid-champion',
+  '.champion-grid-champion-thumbnail',
+  '.champion-grid-item',
+].join(',')
 
 /**
- * 从 summoner-container-wrapper 中提取英雄 ID
- * 支持两种方式：
- * 1. <img> 标签的 src 属性
+ * Extract champion ID from summoner-container-wrapper.
+ * Supports:
+ * 1. <img> src
  * 2. CSS background-image
- * URL 格式: /lol-game-data/assets/v1/champion-icons/102.png
+ * URL format: /lol-game-data/assets/v1/champion-icons/102.png
  */
 function extractChampionIdFromWrapper(wrapper: Element): number | null {
-  // 优先从 <img> 标签提取
+  // Prefer <img> tags.
   const img = wrapper.querySelector('img[src*="champion-icons"]')
   if (img) {
     const src = img.getAttribute('src') || ''
@@ -288,14 +295,14 @@ function extractChampionIdFromWrapper(wrapper: Element): number | null {
     logger.debug('[BalanceBuff] extractFromWrapper: 未找到 img[src*=champion-icons]')
   }
 
-  // fallback: 从 background-image 提取
-  // 真正的图标在子元素 .portrait-icon / .fit-icon 上
+  // Fallback: extract from background-image.
+  // The actual icon is on child elements such as .portrait-icon / .fit-icon.
   const iconContainer = wrapper.querySelector('.champion-icon-container') as HTMLElement | null
     ?? wrapper.querySelector('.champion-icon') as HTMLElement | null
   if (iconContainer) {
-    // 1) 先查自身
+    // 1) Check the element itself first.
     let bg = iconContainer.style.backgroundImage || ''
-    // 2) 自身没有，在子元素中查找含 champion-icons 的 background-image
+    // 2) Then search child elements whose background-image contains champion-icons.
     if (!bg || !bg.includes('champion-icons')) {
       const bgEl = iconContainer.querySelector('[style*="champion-icons"]') as HTMLElement | null
       bg = bgEl?.style.backgroundImage || ''
@@ -311,7 +318,7 @@ function extractChampionIdFromWrapper(wrapper: Element): number | null {
     logger.debug('[BalanceBuff] extractFromWrapper: 未找到 .champion-icon-container 或 .champion-icon')
   }
 
-  // 最终兜底：打印 wrapper 内所有 img 和带 background-image 的元素
+  // Final fallback: inspect images and background-image elements inside the wrapper.
   const allImgs = wrapper.querySelectorAll('img')
   if (allImgs.length > 0) {
     logger.debug('[BalanceBuff] extractFromWrapper: wrapper内所有img: %o', Array.from(allImgs).map(i => ({ src: i.getAttribute('src'), alt: i.getAttribute('alt') })))
@@ -320,19 +327,162 @@ function extractChampionIdFromWrapper(wrapper: Element): number | null {
   return null
 }
 
+function extractChampionIdFromChampionIconUrl(raw: string): number | null {
+  const match = raw.match(/champion-icons\/(\d+)\.png/i)
+  return match ? Number(match[1]) : null
+}
+
+function normalizeChampionLookupText(value: string): string {
+  return value
+    .replace(/\s+/g, ' ')
+    .replace(/['’.\-]/g, '')
+    .trim()
+    .toLowerCase()
+}
+
+function resolveChampionIdByText(text: string): number | null {
+  const normalized = normalizeChampionLookupText(text)
+  if (!normalized) return null
+
+  const champion = getAllChampions().find((item) => {
+    return [
+      item.name,
+      item.title,
+      item.alias,
+      `${item.title} ${item.name}`,
+      `${item.name} ${item.title}`,
+    ].some((candidate) => normalizeChampionLookupText(candidate) === normalized)
+  })
+  return champion?.id ?? null
+}
+
+function extractChampionIdFromElement(el: Element): number | null {
+  const attrs = ['data-champion-id', 'champion-id', 'data-id', 'data-champion']
+  for (const attr of attrs) {
+    const value = el.getAttribute(attr)
+    const id = value ? Number(value) : 0
+    if (Number.isFinite(id) && id > 0) return id
+  }
+
+  const img = el.querySelector('img[src*="champion-icons"]') ?? (el.matches('img[src*="champion-icons"]') ? el : null)
+  if (img) {
+    const id = extractChampionIdFromChampionIconUrl(img.getAttribute('src') || '')
+    if (id) return id
+  }
+
+  const elements = [el, ...Array.from(el.querySelectorAll<HTMLElement>('[style*="champion-icons"]'))]
+  for (const element of elements) {
+    const style = element instanceof HTMLElement ? element.style.backgroundImage : ''
+    const id = extractChampionIdFromChampionIconUrl(style)
+    if (id) return id
+  }
+
+  const textCandidates = [
+    el.getAttribute('title') || '',
+    el.getAttribute('aria-label') || '',
+    el.getAttribute('alt') || '',
+    el.textContent || '',
+  ]
+  for (const candidate of textCandidates) {
+    const id = resolveChampionIdByText(candidate)
+    if (id) return id
+  }
+
+  return null
+}
+
+function logCardDiag(message: string): void {
+  if (message === lastCardDiag) return
+  lastCardDiag = message
+  logger.info('[BalanceBuff] %s', message)
+}
+
+function extractChampionNameFromCard(card: Element): string | null {
+  const direct = card.textContent?.trim()
+  if (direct && direct.length > 1 && direct.length < 25) return direct
+
+  for (const selector of ['[class*="name"]', '[class*="label"]', 'span', 'p']) {
+    const text = card.querySelector<HTMLElement>(selector)?.textContent?.trim()
+    if (text && text.length > 1 && text.length < 25) return text
+  }
+  return null
+}
+
+function resolveChampionIdByCard(card: Element): { championId: number | null; name: string | null } {
+  const idFromDom = extractChampionIdFromElement(card)
+  if (idFromDom) return { championId: idFromDom, name: null }
+
+  const name = extractChampionNameFromCard(card)
+  if (!name) return { championId: null, name: null }
+  return { championId: resolveChampionIdByText(name), name }
+}
+
+function ensureCardHoverObserver(): void {
+  if (!tooltip || !currentMode) {
+    logCardDiag(`网格观察者未就绪 → tooltip=${!!tooltip}, currentMode=${currentMode ? currentMode.dataKey : 'null'}`)
+    return
+  }
+
+  const wrapper = document.querySelector('.champion-cards-component-wrapper')
+  if (!wrapper) {
+    const cardCount = document.querySelectorAll('.champion-card-component').length
+    if (cardCount > 0) {
+      logCardDiag(`有 ${cardCount} 张英雄卡片，但未找到网格容器`)
+    } else {
+      logCardDiag('英雄网格尚未渲染，等待 DOM 出现')
+    }
+    return
+  }
+
+  if (wrapper.hasAttribute(BOUND_ATTR)) return
+  wrapper.setAttribute(BOUND_ATTR, 'cards-wrapper')
+
+  const initialCards = wrapper.querySelectorAll('.champion-card-component').length
+  logger.info('[BalanceBuff] 已绑定英雄网格 hover 观察者，初始卡片数=%d', initialCards)
+
+  cardHoverObserver?.disconnect()
+  cardHoverObserver = new MutationObserver(() => {
+    if (!tooltip || !currentMode) return
+
+    const hovered = wrapper.querySelector('.champion-card-component.card-hovered')
+    if (!hovered) {
+      if (lastHoverChampId !== -2) {
+        lastHoverChampId = -2
+        tooltip.hide()
+      }
+      return
+    }
+
+    const { championId, name } = resolveChampionIdByCard(hovered)
+    if ((championId ?? -1) !== lastHoverChampId) {
+      lastHoverChampId = championId ?? -1
+      logger.info('[BalanceBuff] 网格 hover → %s (championId=%d)', name ?? '?', championId ?? -1)
+    }
+
+    if (!championId || championId <= 0) {
+      tooltip.hide()
+      return
+    }
+    const data = buildTooltipData(championId)
+    if (data) tooltip.show(hovered, 'right', data.caption, data.content)
+    else tooltip.hide()
+  })
+  cardHoverObserver.observe(wrapper, { subtree: true, attributes: true, attributeFilter: ['class'] })
+}
+
 /**
- * 从 champion-bench-item 中提取英雄 ID
- * 支持 <img> 标签和 background-image 两种方式
+ * Extract champion ID from champion-bench-item.
+ * Supports <img> tags and background-image.
  */
 function extractChampionIdFromBench(item: Element): number | null {
-  // 优先从 <img> 标签提取
+  // Prefer <img> tags.
   const img = item.querySelector('img[src*="champion-icons"]')
   if (img) {
     const match = img.getAttribute('src')?.match(/champion-icons\/(\d+)\.png/)
     if (match) return Number(match[1])
   }
 
-  // fallback: 从 background-image 提取
+  // Fallback: extract from background-image.
   const bg = item.querySelector('.bench-champion-background') as HTMLElement | null
   if (bg) {
     const style = bg.style.backgroundImage || ''
@@ -348,7 +498,7 @@ function tryBindHover(): boolean {
 
   logger.debug('[BalanceBuff] tryBindHover: tooltip=%s, mode=%s', !!tooltip, currentMode.dataKey)
 
-  // 我方队员 — 使用和 features.ts 相同的选择器确保覆盖所有位置
+  // Allied team members. Use the same selector as features.ts to cover all positions.
   const party = document.querySelector('.summoner-array.your-party')
   if (party) {
     const wrappers = party.querySelectorAll('.summoner-container-wrapper')
@@ -357,7 +507,7 @@ function tryBindHover(): boolean {
       if (el.hasAttribute(BOUND_ATTR)) return
       el.setAttribute(BOUND_ATTR, 'team')
       el.addEventListener('mouseenter', () => {
-        // 从 DOM 实时提取 championId，不依赖索引对应
+        // Extract championId from the DOM live instead of relying on index alignment.
         const champId = extractChampionIdFromWrapper(el)
         logger.debug('[BalanceBuff] mouseenter: champId=%d', champId ?? -1)
         if (!champId || champId <= 0) return
@@ -370,7 +520,7 @@ function tryBindHover(): boolean {
     logger.debug('[BalanceBuff] tryBindHover: 未找到 .summoner-array.your-party')
   }
 
-  // 候选席
+  // Bench.
   const bench = document.querySelectorAll('.bench-container .champion-bench-item')
   logger.debug('[BalanceBuff] tryBindHover: bench元素=%d个', bench.length)
   bench.forEach((el) => {
@@ -386,14 +536,31 @@ function tryBindHover(): boolean {
     el.addEventListener('mouseleave', () => tooltip!.hide())
   })
 
+  const gridItems = document.querySelectorAll(GRID_SELECTOR)
+  logger.debug('[BalanceBuff] tryBindHover: champion grid元素=%d个', gridItems.length)
+  gridItems.forEach((el) => {
+    if (el.hasAttribute(BOUND_ATTR)) return
+    el.setAttribute(BOUND_ATTR, 'grid')
+    el.addEventListener('mouseenter', () => {
+      const champId = extractChampionIdFromElement(el)
+      logger.debug('[BalanceBuff] mouseenter grid: champId=%d', champId ?? -1)
+      if (!champId || champId <= 0) return
+      const data = buildTooltipData(champId)
+      if (data) tooltip!.show(el, 'right', data.caption, data.content)
+    })
+    el.addEventListener('mouseleave', () => tooltip!.hide())
+  })
+
+  ensureCardHoverObserver()
+
   return true
 }
 
-// ==================== 生命周期 ====================
+// ==================== Lifecycle ====================
 
 async function mountForChampSelect() {
   logger.debug('[BalanceBuff] mountForChampSelect 开始')
-  // 1. 探测当前模式：用 gameMode 映射平衡数据 key，用 queueId 拿官方中文名
+  // 1. Detect current mode: gameMode maps to data key, queueId resolves the official display name.
   let gameMode = ''
   let queueId = 0
   try {
@@ -411,12 +578,12 @@ async function mountForChampSelect() {
     return
   }
 
-  // 直接用 LCU 官方队列中文名，无需自己硬编码
+  // Use the official LCU queue display name instead of hardcoding it here.
   const displayName = queueId > 0 ? getQueueName(queueId) : gameMode
   currentMode = { dataKey: modeKey, displayName }
   logger.info('[BalanceBuff] 进入选人阶段 → %s (gameMode=%s, queueId=%d, dataKey=%s)', displayName, gameMode, queueId, modeKey)
 
-  // 2. 创建 tooltip
+  // 2. Create the tooltip.
   const manager = document.getElementById('lol-uikit-layer-manager-wrapper')
   if (!manager) {
     logger.warn('[BalanceBuff] 未找到 layer-manager-wrapper，延迟挂载')
@@ -424,7 +591,7 @@ async function mountForChampSelect() {
   }
   tooltip = new BalanceTooltip(manager)
 
-  // 3. 注册 DOM 绑定注入（injector 会自愈，换英雄后 DOM 变化时自动重新绑定）
+  // 3. Register DOM binding injection. The injector restores bindings after client rerenders.
   injector.register(tryBindHover)
   injectRegistered = true
 }
@@ -435,20 +602,26 @@ function unmountForChampSelect() {
     injector.unregister(tryBindHover)
     injectRegistered = false
   }
+  if (cardHoverObserver) {
+    cardHoverObserver.disconnect()
+    cardHoverObserver = null
+  }
+  lastCardDiag = ''
+  lastHoverChampId = -2
   if (tooltip) {
     tooltip.destroy()
     tooltip = null
   }
-  // 清理 DOM 标记
+  // Clear DOM markers.
   document.querySelectorAll(`[${BOUND_ATTR}]`).forEach((el) => el.removeAttribute(BOUND_ATTR))
   currentMode = null
 }
 
-// ==================== 对外接口 ====================
+// ==================== Public API ====================
 
 /**
- * 启用/禁用「平衡性调整 buff 提示」
- * 监听 gameflow-phase：进入 ChampSelect 时 mount，离开时 unmount
+ * Enable or disable balance adjustment tooltips.
+ * Listen to gameflow-phase: mount in ChampSelect and unmount after leaving.
  */
 export function updateBalanceBuffTooltip(enabled: boolean) {
   logger.debug('[BalanceBuff] updateBalanceBuffTooltip: enabled=%s, phaseUnsub=%s', enabled, !!phaseUnsub)
@@ -456,7 +629,7 @@ export function updateBalanceBuffTooltip(enabled: boolean) {
     phaseUnsub = lcu.observe(LcuEventUri.GAMEFLOW_PHASE_CHANGE, (event: LCUEventMessage) => {
       const phase = event.data as GameflowPhase
       if (phase === 'ChampSelect') {
-        // 防御：先清再挂
+        // Defensive cleanup before mounting.
         unmountForChampSelect()
         mountForChampSelect()
       } else {
@@ -464,7 +637,7 @@ export function updateBalanceBuffTooltip(enabled: boolean) {
       }
     })
 
-    // 插件启动时若已经在 ChampSelect 阶段，立即挂载
+    // Mount immediately if the plugin starts while already in ChampSelect.
     lcu.getGameflowPhase().then((phase) => {
       logger.debug('[BalanceBuff] 启动时当前阶段=%s', phase)
       if (phase === 'ChampSelect') {

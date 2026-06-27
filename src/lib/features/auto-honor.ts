@@ -2,11 +2,11 @@ import { logger } from '@/index'
 import { lcu, LcuEventUri } from '@/lib/lcu'
 import type { LCUEventMessage, GameflowPhase } from '@/lib/lcu'
 
-// ==================== 对局结束自动点赞 ====================
+// ==================== Auto Honor After Game ====================
 
 const HONOR_CATEGORIES = ['HEART', 'COOL', 'SHOTCALLER'] as const
 
-/** ballot 接口返回类型 */
+/** ballot API response type. */
 interface HonorBallot {
   gameId: number
   eligibleAllies: Array<{
@@ -55,18 +55,18 @@ async function autoHonorTeammate() {
     const votes = ballot.votePool?.votes ?? 1
     logger.info('[AutoHonor] 可用票数: %d, 队友: %d, 对手: %d', votes, allies.length, opponents.length)
 
-    // 打散队友顺序，每人最多 1 票
+    // Shuffle teammates, at most one vote per player.
     for (let i = allies.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1))
       ;[allies[i], allies[j]] = [allies[j], allies[i]]
     }
-    // 打散对手顺序
+    // Shuffle opponents.
     for (let i = opponents.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1))
       ;[opponents[i], opponents[j]] = [opponents[j], opponents[i]]
     }
 
-    // 先给队友，多余的给对手
+    // Prefer teammates, then give remaining votes to opponents.
     const targets = [...allies, ...opponents].slice(0, votes)
 
     for (let i = 0; i < targets.length; i++) {

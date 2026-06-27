@@ -9,7 +9,7 @@ import { getRating } from '@/lib/features'
 import type { GameflowTeamPlayer, PlayerChampionSelection } from '@/types/lcu'
 import '@/styles/GameAnalysisModal.css'
 
-// ==================== 类型 ====================
+// ==================== Types ====================
 
 interface RecentGame {
   championId: number
@@ -54,7 +54,7 @@ interface PlayerAnalysis {
   rating: string
   premadeGroup: string | null
   recentGames: RecentGame[]
-  /** 主播模式标记 */
+  /** Streamer mode flag. */
   isBroadcaster: boolean
 }
 
@@ -66,7 +66,7 @@ interface GameInfo {
   queueId: number
 }
 
-// ==================== 段位颜色映射 ====================
+// ==================== Rank Color Map ====================
 
 const RANK_COLORS: Record<string, string> = {
   CHALLENGER: '#f1c40f',
@@ -97,7 +97,7 @@ const RANK_NAMES: Record<string, string> = {
 
 const PREMADE_COLORS = ['#e8a424', '#4a9eff', '#5bbd72', '#e74c3c', '#c084fc']
 
-/** 开黑组对应的卡片背景色（半透明） */
+/** Semi-transparent card background by premade group. */
 const PREMADE_BG_COLORS = [
   'rgba(232, 164, 36, 0.15)',
   'rgba(74, 158, 255, 0.15)',
@@ -106,12 +106,12 @@ const PREMADE_BG_COLORS = [
   'rgba(192, 132, 252, 0.15)',
 ]
 
-// ==================== 组件 ====================
+// ==================== Component ====================
 
 export interface GameAnalysisModalProps {
   open: boolean
   onClose: () => void
-  /** 调试用：传入 mock 数据直接展示，跳过 LCU 请求 */
+  /** Debug only: render mock data directly and skip LCU requests. */
   mockData?: {
     blueTeam: PlayerAnalysis[]
     redTeam: PlayerAnalysis[]
@@ -135,7 +135,7 @@ export function GameAnalysisModal({ open, onClose, mockData }: GameAnalysisModal
     setGameInfo(null)
     setPremadeGroups(new Map())
 
-    // Mock 模式：直接使用传入的 mock 数据
+    // Mock mode: use the supplied mock data directly.
     if (mockData) {
       setBlueTeam(sortTeamByPosition(mockData.blueTeam))
       setRedTeam(sortTeamByPosition(mockData.redTeam))
@@ -150,20 +150,20 @@ export function GameAnalysisModal({ open, onClose, mockData }: GameAnalysisModal
       const teamTwo = session.gameData.teamTwo ?? []
       const selections = session.gameData.playerChampionSelections ?? []
 
-      // playerChampionSelections 是 puuid 的权威来源，始终包含所有 10 人
-      // 索引 0-4 = teamOne（蓝方），5-9 = teamTwo（红方）
-      // 主播模式玩家会从 teamOne/teamTwo 中消失，但 selections 中依然保留
+      // playerChampionSelections is the authoritative puuid source and always contains all 10 players.
+      // Indices 0-4 are teamOne (blue side), 5-9 are teamTwo (red side).
+      // Streamer-mode players disappear from teamOne/teamTwo but remain in selections.
       const teamSize = Math.ceil(selections.length / 2) || 5
       const selTeamOne = selections.slice(0, teamSize)
       const selTeamTwo = selections.slice(teamSize)
 
-      // puuid → teamParticipantId 映射（仅非主播模式玩家在 team 中有记录）
+      // puuid to teamParticipantId map. Only non-streamer-mode players appear in team lists.
       const puuidToTeamPlayer = new Map<string, GameflowTeamPlayer>()
       for (const p of [...teamOne, ...teamTwo]) {
         puuidToTeamPlayer.set(p.puuid, p)
       }
 
-      // 判断自己所在队伍：优先从 team 匹配，否则从 selections 索引判断
+      // Resolve own team from team lists first, then fall back to selection index.
       const localPuuid = (await lcu.getSummonerInfo()).puuid
       const isInTeamOne = teamOne.some(p => p.puuid === localPuuid)
         || selTeamOne.some(s => s.puuid === localPuuid)
@@ -176,7 +176,7 @@ export function GameAnalysisModal({ open, onClose, mockData }: GameAnalysisModal
         queueId: session.gameData.queue.id,
       })
 
-      // 开黑分组：按 teamParticipantId 聚合（仅非主播模式玩家）
+      // Premade groups: aggregate by teamParticipantId. Streamer-mode players are excluded.
       const groupIdMap = new Map<string, string>()
       const participantGroups = new Map<number, string[]>()
       for (const p of [...teamOne, ...teamTwo]) {
@@ -199,11 +199,11 @@ export function GameAnalysisModal({ open, onClose, mockData }: GameAnalysisModal
       })
       setPremadeGroups(new Map(groupIdMap))
 
-      // 获取队列 tag 用于战绩过滤
+      // Get the queue tag for match-history filtering.
       const queueId = session.gameData.queue.id
       const tag = queueIdToTag(queueId)
 
-      // 解析后的玩家信息
+      // Resolved player information.
       interface ResolvedPlayer {
         puuid: string
         championId: number
@@ -211,7 +211,7 @@ export function GameAnalysisModal({ open, onClose, mockData }: GameAnalysisModal
         isBroadcaster: boolean
       }
 
-      // 从 selections 构建 ResolvedPlayer，通过 puuid 是否在 team 中判断主播模式
+      // Build ResolvedPlayer from selections. Missing team membership means streamer mode.
       const resolveSelections = (sels: PlayerChampionSelection[]): ResolvedPlayer[] =>
         sels.map(s => ({
           puuid: s.puuid,
@@ -223,12 +223,12 @@ export function GameAnalysisModal({ open, onClose, mockData }: GameAnalysisModal
       const resolvedTeamOne = resolveSelections(selTeamOne)
       const resolvedTeamTwo = resolveSelections(selTeamTwo)
 
-      // 并行查询所有玩家数据
+      // Query all player data in parallel.
       const analyzeTeam = async (players: ResolvedPlayer[]): Promise<PlayerAnalysis[]> => {
         return Promise.all(players.map(async (p) => {
           const isBroadcaster = p.isBroadcaster
 
-          // 默认占位
+          // Default placeholder.
           const placeholder: PlayerAnalysis = {
             puuid: p.puuid,
             summonerId: 0,
@@ -251,8 +251,8 @@ export function GameAnalysisModal({ open, onClose, mockData }: GameAnalysisModal
             isBroadcaster,
           }
 
-          // 主播模式：有真实 puuid，可以查询数据，但名字隐藏
-          // 非主播模式：正常查询
+          // Streamer mode: real puuid is available for queries, but the name is hidden.
+          // Non-streamer mode: normal query.
           try {
             const [summoner, ranked, sgpResp] = await Promise.all([
               lcu.getSummonerByPuuid(p.puuid).catch(() => null),
@@ -268,7 +268,7 @@ export function GameAnalysisModal({ open, onClose, mockData }: GameAnalysisModal
               ? `${summoner.gameName} #${summoner.tagLine}`
               : '未知'
 
-            // 解析排位（取最高段位）
+            // Resolve ranked data and use the highest tier.
             let rankText = '未定级'
             let rankColor = RANK_COLORS.UNRANKED
             const TIER_ORDER = ['IRON', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'EMERALD', 'DIAMOND', 'MASTER', 'GRANDMASTER', 'CHALLENGER']
@@ -289,7 +289,7 @@ export function GameAnalysisModal({ open, onClose, mockData }: GameAnalysisModal
                   }
                 }
                 if (candidates.length > 0) {
-                  // 择最高段位
+                  // Pick the highest tier.
                   candidates.sort((a, b) => {
                     const ta = TIER_ORDER.indexOf(a.tier)
                     const tb = TIER_ORDER.indexOf(b.tier)
@@ -303,7 +303,7 @@ export function GameAnalysisModal({ open, onClose, mockData }: GameAnalysisModal
               }
             }
 
-            // 解析战绩
+            // Resolve match history.
             if (!sgpResp || !sgpResp.games?.length) {
               return { ...placeholder, summonerName, rankText, rankColor, rating: '' }
             }
@@ -369,12 +369,12 @@ export function GameAnalysisModal({ open, onClose, mockData }: GameAnalysisModal
     }
   }, [mockData])
 
-  // 打开时加载
+  // Load when opened.
   useEffect(() => {
     if (open) loadAnalysis()
   }, [open, loadAnalysis])
 
-  // 计算队伍平均胜率
+  // Calculate team average win rate.
   const avgWinRate = (team: PlayerAnalysis[]) => {
     const valid = team.filter(p => p.winRate != null)
     if (valid.length === 0) return null
@@ -411,7 +411,7 @@ export function GameAnalysisModal({ open, onClose, mockData }: GameAnalysisModal
           {error && <div className="sga-error">{error}</div>}
           {!loading && !error && (blueTeam.length > 0 || redTeam.length > 0) && (
             <div className="sga-teams">
-              {/* 蓝色方 */}
+              {/* Blue side */}
               <div className="sga-team">
                 <div className="sga-team-header sga-team-header--blue">
                   <span className="sga-team-name">蓝色方</span>
@@ -428,7 +428,7 @@ export function GameAnalysisModal({ open, onClose, mockData }: GameAnalysisModal
                 </div>
               </div>
 
-              {/* 红色方 */}
+              {/* Red side */}
               <div className="sga-team">
                 <div className="sga-team-header sga-team-header--red">
                   <span className="sga-team-name">红色方</span>
@@ -457,7 +457,7 @@ export function GameAnalysisModal({ open, onClose, mockData }: GameAnalysisModal
   )
 }
 
-// ==================== 玩家行组件 ====================
+// ==================== Player Row Component ====================
 
 function renderKdaValue(val: number, isMax: boolean) {
   const text = String(val)
@@ -466,7 +466,7 @@ function renderKdaValue(val: number, isMax: boolean) {
 
 function PlayerRow({ player, isRed, queueId }: { player: PlayerAnalysis; isRed: boolean; queueId?: number }) {
   const winRate = player.winRate
-  // 胜率颜色
+  // Win-rate color.
   const winColor = winRate != null
     ? (winRate >= 70 ? '#e8a424' : winRate >= 50 ? '#5bbd72' : winRate >= 30 ? '#e84057' : '#9b59b6')
     : '#5c5b57'
@@ -476,7 +476,7 @@ function PlayerRow({ player, isRed, queueId }: { player: PlayerAnalysis; isRed: 
   const kdaStr = player.kdaNum >= 99 ? 'Perfect' : player.kdaNum.toFixed(1)
   const kdaColor = player.kdaNum >= 3 ? '#5bbd72' : '#e74c3c'
 
-  // 开黑标记
+  // Premade marker.
   const premadeGroup = player.premadeGroup
   const premadeIdx = premadeGroup ? premadeGroup.charCodeAt(0) - 65 : -1
   const premadeColor = premadeIdx >= 0 ? (PREMADE_COLORS[premadeIdx] ?? '#c8aa6e') : undefined
@@ -498,7 +498,7 @@ function PlayerRow({ player, isRed, queueId }: { player: PlayerAnalysis; isRed: 
       <div
         className={`sga-player ${isRed ? 'sga-player--red' : 'sga-player--blue'}`}
       >
-        {/* 英雄头像 */}
+        {/* Champion avatar */}
         <div className="sga-player-champ">
           {player.championId > 0 ? (
             <img className="sga-player-champ-img" src={getChampIcon(player.championId)} alt="" />
@@ -507,7 +507,7 @@ function PlayerRow({ player, isRed, queueId }: { player: PlayerAnalysis; isRed: 
           )}
         </div>
 
-        {/* 玩家信息 */}
+        {/* Player info */}
         <div className="sga-player-info">
           <div className="sga-player-name-row">
             <span className="sga-player-name">{player.summonerName || '???'}</span>
@@ -527,7 +527,7 @@ function PlayerRow({ player, isRed, queueId }: { player: PlayerAnalysis; isRed: 
           </span>
         </div>
 
-        {/* 胜率 */}
+        {/* Win rate */}
         <div className="sga-player-winrate">
           {winRate != null ? (
             <>
@@ -559,7 +559,7 @@ function PlayerRow({ player, isRed, queueId }: { player: PlayerAnalysis; isRed: 
         </div>
       </div>
 
-      {/* 近期战绩 */}
+      {/* Recent match history */}
       {player.recentGames.length > 0 ? (
         <div className="sga-recent">
           {player.recentGames.map((g, i) => (
@@ -580,7 +580,7 @@ function PlayerRow({ player, isRed, queueId }: { player: PlayerAnalysis; isRed: 
   )
 }
 
-// ==================== 战绩弹窗独立渲染 ====================
+// ==================== Match History Modal Portal ====================
 
 let matchModalRoot: Root | null = null
 let matchModalContainer: HTMLDivElement | null = null

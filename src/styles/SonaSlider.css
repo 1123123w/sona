@@ -1,4 +1,4 @@
-/* Sona Slider - 海克斯风格滑动条 */
+/* Sona Slider */
 
 .sonaenhance-slider {
   position: relative;
@@ -8,7 +8,7 @@
   align-items: center;
 }
 
-/* 隐藏原生 input，但保留交互 */
+/* Hide the native input while preserving interaction. */
 .sonaenhance-slider-input {
   position: absolute;
   width: 100%;
@@ -19,7 +19,7 @@
   margin: 0;
 }
 
-/* 轨道 */
+/* Track */
 .sonaenhance-slider-track {
   position: absolute;
   width: 100%;
@@ -28,7 +28,7 @@
   border: 1px solid #010a13;
 }
 
-/* 填充 */
+/* Fill */
 .sonaenhance-slider-fill {
   position: absolute;
   height: 4px;
@@ -38,7 +38,7 @@
   transition: width 0.05s linear;
 }
 
-/* 滑块 */
+/* Thumb */
 .sonaenhance-slider-thumb {
   position: absolute;
   width: 12px;

@@ -3,24 +3,24 @@ import { lcu } from '@/lib/lcu'
 import { injector } from '@/lib/InjectorManager'
 import { sleep } from '@/lib/utils'
 
-// ==================== 好友智能分组 ====================
+// ==================== Friend Smart Grouping ====================
 
 const SONA_FRIEND_GROUP_ATTR = 'data-sonaenhance-friend-group'
 const SONA_FRIEND_CHECKED_ATTR = 'data-sonaenhance-friend-checked'
 const FRIENDS_URI = '/lol-chat/v1/friends'
 
-/** 用于给同一对局分配相同颜色 */
+/** Colors used to assign the same color to the same game. */
 const GAME_COLORS = [
   '#e8a424', '#4a9eff', '#5bbd72', '#e74c3c', '#c084fc', '#f97316', '#14b8a6', '#ec4899',
   '#8b5cf6', '#06b6d4', '#eab308', '#ef4444', '#22d3ee', '#a3e635', '#fb923c', '#f472b6',
 ]
 
 
-/** gameId → 颜色 映射缓存 */
+/** gameId to color cache. */
 let gameColorMap = new Map<string, string>()
 let colorIndex = 0
 
-/** 好友 name → { gameId, gameStatus } 映射缓存（由按需查询填充） */
+/** Friend name to game info cache, populated by on-demand queries. */
 let friendInfoMap = new Map<string, { gameId: number; gameStatus: string }>()
 let friendRefreshTimer: number | null = null
 let friendRefreshInFlight: Promise<void> | null = null
@@ -33,7 +33,7 @@ function getGameColor(gameId: string): string {
   return gameColorMap.get(gameId)!
 }
 
-/** 异步查询所有好友的游戏状态，建立 name → gameInfo 映射（带重试） */
+/** Query all friend game statuses asynchronously and build the name to game info map. */
 async function refreshFriendInfoMap(retries = 5) {
   if (friendRefreshInFlight) return friendRefreshInFlight
 
@@ -57,8 +57,8 @@ async function doRefreshFriendInfoMap(retries = 5) {
         const name = f.gameName || f.name
         if (!name) continue
 
-        // lol.gameId / lol.gameStatus 是字符串形式，需要转 number
-        // （XMPP presence 字段约定所有值都是 string）
+        // lol.gameId / lol.gameStatus are strings and need numeric conversion.
+        // XMPP presence fields conventionally store every value as a string.
         const gameIdStr = f.lol?.gameId
         const gameId = gameIdStr ? Number(gameIdStr) : 0
         const gameStatus = f.lol?.gameStatus ?? ''
@@ -97,17 +97,17 @@ function scheduleFriendInfoRefresh(delay = 250) {
 }
 
 /**
- * 注入任务：扫描好友列表，标记游戏中好友开黑好友用同样颜色的border-right展示
+ * Injection task: scan the friend list and mark friends in the same game with the same border color.
  *
- * DOM 结构：
- * - 好友列表容器: .lol-social-lower-pane-container
- * - 每个好友: lol-social-roster-member（离线时额外有 .offline）
- *   - .member-name → 好友名字（不含 tag）
- *   - span.status-message.game-status.dnd → 游戏中状态
- *   - parentElement 是列表中可移动的 div
+ * DOM structure:
+ * - friend list container: .lol-social-lower-pane-container
+ * - each friend: lol-social-roster-member, plus .offline when offline
+ *   - .member-name: friend name without tag
+ *   - span.status-message.game-status.dnd: in-game status
+ *   - parentElement is the movable list row
  *
- * 好友列表视觉从上到下 = DOM 从下到上（逆序）
- * 所以"移动到底部" = 视觉上排在最前面
+ * The visual friend list is reversed from the DOM order, so moving to the bottom
+ * places the row first visually.
  */
 function tryInjectFriendSmartGroup(): boolean {
   const container = document.querySelector('.lol-social-lower-pane-container')
@@ -116,7 +116,7 @@ function tryInjectFriendSmartGroup(): boolean {
   const allMembers = container.querySelectorAll('[class*="lol-social-roster-member"]')
   if (allMembers.length === 0) return true
 
-  // 第一轮：收集 gameId → 好友元素列表
+  // First pass: collect gameId to friend element lists.
   const gameIdToElements = new Map<string, HTMLElement[]>()
 
   allMembers.forEach((member) => {
@@ -126,7 +126,7 @@ function tryInjectFriendSmartGroup(): boolean {
     const isInGame = !isOffline && !!el.querySelector('span.status-message.game-status.dnd')
 
     if (!isInGame) {
-      // 不在游戏中或离线，清除旧标记
+      // Clear stale marks when not in-game or offline.
       if (el.hasAttribute(SONA_FRIEND_GROUP_ATTR)) {
         el.removeAttribute(SONA_FRIEND_GROUP_ATTR)
         el.style.borderRight = ''
@@ -135,12 +135,12 @@ function tryInjectFriendSmartGroup(): boolean {
       return
     }
 
-    // 从 DOM 获取好友名字
+    // Read the friend name from DOM.
     const nameEl = el.querySelector('.member-name')
     const memberName = nameEl?.textContent?.trim() ?? ''
     if (!memberName) return
 
-    // 从缓存中匹配 gameId
+    // Match gameId from cache.
     const info = friendInfoMap.get(memberName)
     const gameId = info ? String(info.gameId) : undefined
 
@@ -148,7 +148,7 @@ function tryInjectFriendSmartGroup(): boolean {
       if (!gameIdToElements.has(gameId)) gameIdToElements.set(gameId, [])
       gameIdToElements.get(gameId)!.push(el)
     } else {
-      // 没有 gameId（选人中等），清除可能的旧标记
+      // Clear possible stale marks when gameId is unavailable, such as champ select.
       if (el.hasAttribute(SONA_FRIEND_GROUP_ATTR)) {
         el.removeAttribute(SONA_FRIEND_GROUP_ATTR)
         el.style.borderRight = ''
@@ -156,10 +156,10 @@ function tryInjectFriendSmartGroup(): boolean {
     }
   })
 
-  // 第二轮：只对同一 gameId 有 2+ 好友的组（真正开黑）加颜色标记
+  // Second pass: only mark groups with 2+ friends in the same game.
   gameIdToElements.forEach((elements, gameId) => {
     if (elements.length < 2) {
-      // 独自玩的，清除可能的旧标记
+      // Clear stale marks for solo players.
       elements.forEach((el) => {
         if (el.hasAttribute(SONA_FRIEND_GROUP_ATTR)) {
           el.removeAttribute(SONA_FRIEND_GROUP_ATTR)

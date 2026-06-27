@@ -12,7 +12,7 @@
   z-index: 1;
 }
 
-/* ---- SONA 品牌标题 ---- */
+/* ---- SONA brand title ---- */
 .sonaenhance-home-brand {
   position: relative;
   z-index: 5;
@@ -52,7 +52,7 @@
   }
 }
 
-/* ---- 头像区域 ---- */
+/* ---- Avatar area ---- */
 .sonaenhance-home-avatar-wrap {
   position: relative;
   z-index: 1;
@@ -86,7 +86,7 @@
   }
 }
 
-/* 呼吸光晕 */
+/* Breathing glow */
 .sonaenhance-home-avatar-glow {
   position: absolute;
   inset: -18px;
@@ -112,7 +112,7 @@
   }
 }
 
-/* ---- 欢迎区域 ---- */
+/* ---- Welcome area ---- */
 .sonaenhance-home-welcome {
   margin-top: 6px;
   position: relative;
@@ -167,7 +167,7 @@
   font-size: 12px;
 }
 
-/* ---- 语录 ---- */
+/* ---- Quote ---- */
 .sonaenhance-home-quote {
   position: relative;
   z-index: 1;

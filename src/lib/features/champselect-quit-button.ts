@@ -1,24 +1,24 @@
 /**
- * 英雄选择阶段"退出对局"按钮注入
+ * Inject a "quit match" button during champ select.
  *
- * 背景：
- *   在**非自定义对局**（匹配/排位/大乱斗等）的英雄选择阶段，客户端内置的
- *   `.quit-button` 不会被渲染出来。玩家想秒退只能靠关客户端或其他邪道，
- *   体验很差。
+ * Background:
+ *   In non-custom champ-select flows, the client does not render its built-in
+ *   `.quit-button`. Players otherwise need to close the client or use worse workarounds.
  *
- * 方案：
- *   监听 gameflow-phase，进入 ChampSelect 时注册 injector 任务：
- *     - 若 `.bottom-right-buttons` 里已有 `.quit-button`（自定义对局）→ 不管
- *     - 否则克隆一个长得一样的按钮插入容器末尾，点击走 Sona 的确认弹窗 → `lcu.dodgeChampSelect()`
+ * Approach:
+ *   Listen to gameflow-phase and register an injector task in ChampSelect:
+ *     - if `.bottom-right-buttons` already has `.quit-button` (custom games), do nothing
+ *     - otherwise insert a matching button and route clicks through Sona confirmation
  *
- *   为什么选 DOM 注入而不是 Ember hook：
- *     1. 原生 `.quit-button` 的显隐由 `isCustomGame` 等字段控制，即便用 mixin
- *        让它显示出来，点击回调背后可能还有二次校验，改的面太大
- *     2. DOM 注入对客户端内部字段无依赖，`.bottom-right-buttons` 是非常稳定的容器
- *     3. 切开关能立即生效（无需重启）——Ember hook 方案必须在 init 阶段部署
+ *   Why DOM injection instead of an Ember hook:
+ *     1. The native `.quit-button` visibility depends on fields like `isCustomGame`,
+ *        and click handlers may have additional checks behind them.
+ *     2. DOM injection does not depend on internal client fields, and
+ *        `.bottom-right-buttons` is a stable container.
+ *     3. The toggle takes effect immediately without a restart.
  *
- * 样式参考（用户提供）：
- *   .quit-button 宽 125px、右边距 10px，配合父容器 flex 布局
+ * Style reference:
+ *   .quit-button width 125px and margin-right 10px, matching the parent flex layout.
  */
 
 import { logger } from '@/index'
@@ -26,21 +26,20 @@ import { lcu, LcuEventUri, type LCUEventMessage } from '@/lib/lcu'
 import type { GameflowPhase } from '@/types/lcu'
 import { injector } from '@/lib/InjectorManager'
 
-// ==================== 常量 ====================
+// ==================== Constants ====================
 
 const CONTAINER_SELECTOR = '.bottom-right-buttons'
 const NATIVE_QUIT_SELECTOR = '.quit-button'
 const SONA_QUIT_ATTR = 'data-sonaenhance-quit-button'
 const CONFIRM_OVERLAY_ID = 'sonaenhance-quit-confirm-overlay'
 
-// ==================== 确认弹窗 ====================
+// ==================== Confirm Dialog ====================
 
 /**
- * 展示一个居中的确认弹窗（原生 DOM，不走 React——这个功能太独立，
- * 不值得引 React root 进来）
+ * Show a centered confirm dialog with native DOM instead of a dedicated React root.
  */
 function showConfirmDialog(onConfirm: () => void) {
-  // 防止重复打开
+  // Prevent duplicate dialogs.
   if (document.getElementById(CONFIRM_OVERLAY_ID)) return
 
   const overlay = document.createElement('div')
@@ -97,7 +96,7 @@ function showConfirmDialog(onConfirm: () => void) {
   const btnRow = document.createElement('div')
   btnRow.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;'
 
-  // 两个按钮都直接用客户端原生的 <lol-uikit-flat-button>，自带官方样式/hover/点击反馈
+  // Use the client's native <lol-uikit-flat-button> for built-in styling and interaction.
   const cancelBtn = document.createElement('lol-uikit-flat-button')
   cancelBtn.textContent = '取消'
   cancelBtn.style.minWidth = '100px'
@@ -105,7 +104,7 @@ function showConfirmDialog(onConfirm: () => void) {
   const confirmBtn = document.createElement('lol-uikit-flat-button')
   confirmBtn.textContent = '确认秒退'
   confirmBtn.style.minWidth = '120px'
-  // 强调危险操作——文字染红，但是好像没用
+  // Mark the risky action in red when the component honors text color.
   confirmBtn.style.color = '#e84749'
 
   const close = () => {
@@ -128,18 +127,18 @@ function showConfirmDialog(onConfirm: () => void) {
   document.body.appendChild(overlay)
 }
 
-// ==================== 按钮构建 ====================
+// ==================== Button Builder ====================
 
 /**
- * 直接召唤客户端的原生自定义组件 `<lol-uikit-flat-button>`——
- * 浏览器底层会自动为它生成带官方金色边框、hover 动效、点击反馈的 Shadow DOM。
- * 我们只管塞文字和绑事件，样式/交互全免费。
+ * Use the client's native `<lol-uikit-flat-button>`.
+ * The browser creates its Shadow DOM with official borders, hover, and click feedback.
+ * We only provide text and event handling.
  */
 function buildSonaQuitButton(): HTMLElement {
   const btn = document.createElement('lol-uikit-flat-button')
   btn.setAttribute(SONA_QUIT_ATTR, 'true')
   btn.textContent = '退出对局'
-  // 对齐原生 quit-button 的布局规格：125px 宽 + 10px 右边距，配合父容器 flex
+  // Match native quit-button layout: 125px width and 10px right margin in the flex parent.
   btn.style.width = '125px'
   btn.style.marginRight = '10px'
 
@@ -159,36 +158,36 @@ function buildSonaQuitButton(): HTMLElement {
   return btn
 }
 
-// ==================== 注入任务 ====================
+// ==================== Injection Task ====================
 
 /**
- * 检查并注入退出按钮（幂等）：
- *   - 已有原生 `.quit-button`（自定义对局）→ 不注入
- *   - 已有我们的按钮 → 跳过
- *   - 否则：克隆并插入
+ * Check and inject the quit button idempotently:
+ *   - native `.quit-button` already exists in custom games: do not inject
+ *   - our button already exists: skip
+ *   - otherwise clone and insert
  */
 function tryInjectQuitButton(): boolean {
   const container = document.querySelector(CONTAINER_SELECTOR)
   if (!container) return false
 
-  // 原生按钮已存在（自定义对局），不干预
+  // Native button already exists in custom games; leave it alone.
 //   if (container.querySelector(NATIVE_QUIT_SELECTOR)) {
 //     const ours = container.querySelector(`[${SONA_QUIT_ATTR}]`)
 //     if (ours) ours.remove()
 //     return true
 //   }
 
-  // 已经注入过，ok
+  // Already injected.
   if (container.querySelector(`[${SONA_QUIT_ATTR}]`)) return true
 
   const btn = buildSonaQuitButton()
-  // 插到容器最前面，视觉上靠左——和原生 quit-button 位置一致
+  // Insert first so it appears on the left, matching the native quit-button position.
   container.insertBefore(btn, container.firstChild)
   logger.info('[QuitButton] 已注入选人阶段退出按钮 ✓')
   return true
 }
 
-// ==================== 生命周期 ====================
+// ==================== Lifecycle ====================
 
 let phaseUnsub: (() => void) | null = null
 let injectRegistered = false
@@ -204,17 +203,17 @@ function unmount() {
     injector.unregister(tryInjectQuitButton)
     injectRegistered = false
   }
-  // 清理已注入的按钮和可能打开的确认弹窗
+  // Remove injected buttons and any open confirm dialog.
   document.querySelectorAll(`[${SONA_QUIT_ATTR}]`).forEach((el) => el.remove())
   const overlay = document.getElementById(CONFIRM_OVERLAY_ID)
   if (overlay) overlay.remove()
 }
 
-// ==================== 对外接口 ====================
+// ==================== Public API ====================
 
 /**
- * 启用/禁用「选人阶段退出按钮」功能
- * 仅在 ChampSelect 阶段挂载 injector 任务，离开阶段立即清理
+ * Enable or disable the champ-select quit button.
+ * Mounts the injector task only during ChampSelect and cleans up immediately after leaving.
  */
 export function updateChampSelectQuitButton(enabled: boolean) {
   if (enabled && !phaseUnsub) {
@@ -227,7 +226,7 @@ export function updateChampSelectQuitButton(enabled: boolean) {
       }
     })
 
-    // 启动时若已经在 ChampSelect 阶段，立即挂载
+    // Mount immediately if the plugin starts while already in ChampSelect.
     lcu.getGameflowPhase().then((phase) => {
       if (phase === 'ChampSelect') mount()
     }).catch(() => { /* ignore */ })

@@ -21,13 +21,13 @@ export function Sidebar({ items, activeId, onSelect, collapsed, onToggle }: Side
   const { t } = useI18n()
   return (
     <div className={`sonaenhance-sidebar${collapsed ? ' sonaenhance-sidebar--collapsed' : ''}`}>
-      {/* Logo 区域 */}
+      {/* Logo area */}
       <div className="sonaenhance-sidebar-logo">
         <span className="sonaenhance-sidebar-logo-icon"><MusicIcon /></span>
         {!collapsed && <span className="sonaenhance-sidebar-logo-text">Sona-E</span>}
       </div>
 
-      {/* 导航项 */}
+      {/* Navigation items */}
       <nav className="sonaenhance-sidebar-nav">
         {items.map((item) => (
           <button
@@ -42,7 +42,7 @@ export function Sidebar({ items, activeId, onSelect, collapsed, onToggle }: Side
         ))}
       </nav>
 
-      {/* 底部展开/收缩按钮 */}
+      {/* Bottom expand/collapse button */}
       <div className="sonaenhance-sidebar-footer">
         <button className="sonaenhance-sidebar-toggle" onClick={onToggle} title={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}>
           {collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}

@@ -3,19 +3,19 @@ import { createPortal } from 'react-dom'
 import '@/styles/Modal.css'
 
 export interface ModalProps {
-  /** 是否显示 */
+  /** Whether the modal is visible. */
   open: boolean
-  /** 关闭回调 */
+  /** Close callback. */
   onClose: () => void
-  /** 内容 */
+  /** Modal content. */
   children: ReactNode
-  /** 宽度，默认 680px */
+  /** Width, defaults to 680px. */
   width?: number | string
-  /** 高度，默认 520px */
+  /** Height, defaults to 520px. */
   height?: number | string
-  /** 点击遮罩是否关闭，默认 true */
+  /** Whether clicking the backdrop closes the modal. Defaults to true. */
   maskClosable?: boolean
-  /** 是否显示关闭按钮，默认 true */
+  /** Whether to show the close button. Defaults to true. */
   closable?: boolean
 }
 
@@ -33,7 +33,7 @@ export function Modal({
   const [mounted, setMounted] = useState(false)
   const [closing, setClosing] = useState(false)
 
-  // 控制挂载/卸载：open 为 true 时立即挂载，关闭时等动画结束再卸载
+  // Mount immediately on open, then unmount after the close animation.
   useEffect(() => {
     if (open) {
       setMounted(true)
@@ -43,7 +43,7 @@ export function Modal({
     }
   }, [open])
 
-  // 监听退出动画结束后真正卸载
+  // Unmount after the exit animation completes.
   useEffect(() => {
     if (!closing) return
     const overlay = overlayRef.current
@@ -62,7 +62,7 @@ export function Modal({
     return () => overlay.removeEventListener('animationend', onEnd)
   }, [closing])
 
-  // ESC 关闭
+  // Close on Escape.
   useEffect(() => {
     if (!open) return
     const handleKey = (e: KeyboardEvent) => {
@@ -72,7 +72,7 @@ export function Modal({
     return () => document.removeEventListener('keydown', handleKey)
   }, [open, onClose])
 
-  // 打开时阻止背景滚动
+  // Prevent background scrolling while open.
   useEffect(() => {
     if (mounted && !closing) {
       document.body.style.overflow = 'hidden'
@@ -109,7 +109,7 @@ export function Modal({
         style={style}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* 关闭按钮（悬浮右上角） */}
+        {/* Floating close button */}
         {closable && (
           <button className="sonaenhance-modal-close" onClick={onClose} title="Close">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">

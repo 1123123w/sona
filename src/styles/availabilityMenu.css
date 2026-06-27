@@ -1,4 +1,4 @@
-/* Sona Availability Menu - 在线状态选择菜单 */
+/* Sona Availability Menu */
 
 .sonaenhance-availability-menu {
   position: fixed;
@@ -60,7 +60,7 @@
   color: #c8aa6e;
 }
 
-/* 状态圆点 */
+/* Status dot */
 .sonaenhance-availability-dot {
   width: 8px;
   height: 8px;

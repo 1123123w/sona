@@ -1,4 +1,4 @@
-/* Sona Switch - 海克斯风格开关 */
+/* Sona Switch */
 
 .sonaenhance-switch {
   position: relative;
@@ -20,7 +20,7 @@
   border-color: #a09b8c;
 }
 
-/* ON 状态 */
+/* On state */
 .sonaenhance-switch--on {
   background: rgba(200, 170, 110, 0.2);
   border-color: #c8aa6e;
@@ -32,13 +32,13 @@
   box-shadow: inset 0 0 12px rgba(200, 170, 110, 0.4);
 }
 
-/* 禁用状态 */
+/* Disabled state */
 .sonaenhance-switch--disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-/* 滑块 */
+/* Thumb */
 .sonaenhance-switch-thumb {
   position: absolute;
   width: 16px;

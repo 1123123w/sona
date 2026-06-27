@@ -1,6 +1,6 @@
 /* Sona Plugin - App-level Styles */
 
-/* ---- 主布局：侧边栏 + 内容区 ---- */
+/* ---- Main layout: sidebar + content ---- */
 .sonaenhance-layout {
   display: flex;
   height: 100%;
@@ -14,7 +14,7 @@
   min-width: 0;
 }
 
-/* 自定义滚动条 */
+/* Custom scrollbar */
 .sonaenhance-content::-webkit-scrollbar {
   width: 6px;
 }
@@ -32,7 +32,7 @@
   background: rgba(200, 170, 110, 0.35);
 }
 
-/* ---- 占位页面 ---- */
+/* ---- Placeholder page ---- */
 .sonaenhance-page-placeholder {
   display: flex;
   align-items: center;
@@ -43,7 +43,7 @@
   letter-spacing: 0.05em;
 }
 
-/* ---- Modal 标题图标（保留兼容） ---- */
+/* ---- Modal title icon compatibility ---- */
 .sonaenhance-modal-title-inner {
   display: flex;
   align-items: center;

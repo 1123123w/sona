@@ -5,10 +5,10 @@ import type { LCUEventMessage, GameflowPhase, ChampSelectSession } from '@/lib/l
 import { sleep } from '@/lib/utils'
 import { getChampionById } from '@/lib/assets'
 
-// ==================== 秒抢英雄 ====================
+// ==================== Auto Lock Champion ====================
 
 /**
- * 秒抢/预选成功后发送 celebration 消息到聊天框
+ * Send a celebration message to chat after successful pick/prepick.
  */
 async function notifyAutoLockSuccess(championId: number, isLock: boolean) {
   const champInfo = getChampionById(championId)
@@ -18,7 +18,7 @@ async function notifyAutoLockSuccess(championId: number, isLock: boolean) {
   try {
     await lcu.sendChampSelectMessage(msg, 'celebration')
   } catch {
-    // 聊天室未就绪时静默忽略
+    // Ignore silently before chat is ready.
   }
 }
 
@@ -83,8 +83,8 @@ async function resolveTargetChampionId(session: ChampSelectSession, actionChampi
 }
 
 /**
- * 监听英雄选择的 actions 变化，当轮到自己的 pick action 处于 isInProgress 时秒锁
- * 仅在有 pick 动作的模式生效（排位/匹配等），大乱斗等无 pick 的模式不受影响
+ * Listen for champ-select action changes and lock when the local pick action is in progress.
+ * Only applies to modes with pick actions; ARAM and similar modes are unaffected.
  */
 async function tryAutoLockChampion() {
   if (getConfiguredChampionIds().length === 0) {
@@ -94,7 +94,7 @@ async function tryAutoLockChampion() {
 
   let lastPreselectedChampionId = 0
 
-  // 排位赛 BP 可能长达 5 分钟，300 次 × 1s 轮询足够覆盖
+  // Ranked BP can last up to 5 minutes; 300 polls at 1s cover the full window.
   for (let attempt = 0; attempt < 300; attempt++) {
     try {
       const session = await lcu.getChampSelectSession()
@@ -161,7 +161,7 @@ async function tryAutoLockChampion() {
         if (instant) {
           logger.info('[AutoLock] 真正轮到选人了！秒锁英雄 ID: %d (actionId: %d)', championId, myPickAction.id)
 
-          // 方案：PATCH 带 completed:true 一步到位完成选择+锁定
+          // Primary path: PATCH with completed:true to select and lock in one step.
           const patchRes = await fetch(actionUrl, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
@@ -179,7 +179,7 @@ async function tryAutoLockChampion() {
             logger.info('[AutoLock] 秒锁成功 (PATCH completed:true) ✓')
             notifyAutoLockSuccess(championId, true)
           } else {
-            // 备用方案：先 PATCH 选择，再 POST /select 锁定
+            // Fallback: PATCH the champion first, then POST /select to lock.
             logger.warn('[AutoLock] PATCH 方案失败，尝试备用方案 /select')
             await fetch(actionUrl, {
               method: 'PATCH',
@@ -211,7 +211,7 @@ async function tryAutoLockChampion() {
 
       await sleep(1000)
     } catch {
-      // 轮询期间有人秒退（getChampSelectSession 会报 404），直接结束
+      // If someone dodges during polling, getChampSelectSession returns 404; stop directly.
       logger.error('[AutoLock] 轮询中断 (可能有人秒退了房间)')
       return
     }

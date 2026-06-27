@@ -38,7 +38,7 @@ export function AboutPage() {
         {t('about.desc')}
       </p>
 
-      {/* 信息卡片 + 技术栈 并排 */}
+      {/* Info cards and tech stack side by side */}
       <div className="sonaenhance-about-row">
         <div className="sonaenhance-about-cards">
           <InfoCard icon={<ZapIcon />} label={t('about.plugin')} value={`Sona-E v${__PLUGIN_VERSION__}`} />

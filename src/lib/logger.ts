@@ -1,6 +1,6 @@
 /**
- * 插件公用日志工具
- * 支持 banner 打印、多日志级别、console 格式化占位符（%s, %d, %o 等）
+ * Shared plugin logger.
+ * Supports banner output, log levels, and console formatting placeholders.
  */
 
 type LogLevel = 'info' | 'warn' | 'error' | 'debug'
@@ -12,13 +12,13 @@ export interface RecentSonaLogEntry {
 }
 
 interface LoggerOptions {
-  /** 插件名称 */
+  /** Plugin name. */
   name: string
-  /** 插件版本 */
+  /** Plugin version. */
   version: string
-  /** 名称区域背景色 */
+  /** Name badge background color. */
   primaryColor?: string
-  /** 版本区域背景色 */
+  /** Version badge background color. */
   accentColor?: string
 }
 
@@ -87,7 +87,7 @@ export function createLogger(options: LoggerOptions) {
 
   const prefix = `${name}`
 
-  /** 打印带样式的 banner */
+  /** Print the styled banner. */
   function printBanner() {
     const nameStyle = [
       'color: #fff',
@@ -115,8 +115,8 @@ export function createLogger(options: LoggerOptions) {
   }
 
   /**
-   * 带级别标签的日志输出
-   * 支持 console 原生格式化占位符：%s, %d, %i, %f, %o, %O, %c
+   * Log output with a level tag.
+   * Supports native console formatting placeholders: %s, %d, %i, %f, %o, %O, %c.
    *
    * @example
    *   logger.info('loaded in %dms', 42)
@@ -147,7 +147,7 @@ export function createLogger(options: LoggerOptions) {
 
     const resetStyle = 'color: inherit; background: inherit;'
 
-    // %c 插件名 %c 级别 %c 正文（保留占位符让浏览器处理）
+    // %c plugin name, %c level, %c body. Keep placeholders for the browser.
     ;(console[method] as (...a: unknown[]) => void)(
       `%c${prefix}%c${badge}%c ${message}`,
       nameBadgeStyle,

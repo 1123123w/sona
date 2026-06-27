@@ -1,8 +1,8 @@
 /* Sona Plugin - Global Styles */
 
 /* 
- * 不使用全屏覆盖，避免在 League Client CEF 环境中阻挡事件。
- * #sonaenhance-root 仅作为一个不影响布局的挂载点。
+ * Avoid fullscreen overlays so the League Client CEF keeps receiving events.
+ * #sonaenhance-root is only a layout-neutral mount point.
  */
 #sonaenhance-root {
   position: fixed;

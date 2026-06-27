@@ -326,8 +326,7 @@ export function DebugPage() {
           <SonaButton onClick={() => runAndLog('可选英雄列表', () => lcu.getPickableChampionIds())}>
             可选英雄
           </SonaButton>
-          {/* 秒退功能暂时注释掉——目前 /lol-lobby-team-builder/champ-select/v1/session/quit 实测不生效，
-              仍在寻找可用接口。找到之前不暴露入口，免得误导玩家以为能用 */}
+          {/* Champ-select quit stays hidden until a reliable LCU endpoint is found. */}
           {/*
           <SonaButton onClick={() => runAndLog('秒退（英雄选择阶段）', async () => {
             const phase = await lcu.getGameflowPhase()
@@ -1000,7 +999,7 @@ export function DebugPage() {
         </SettingCard>
       </SettingGroup>
 
-      {/* 输出区 */}
+      {/* Output area */}
       {output && (
         <div className="sonaenhance-debug-output">
           <pre>{output}</pre>

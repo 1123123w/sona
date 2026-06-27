@@ -13,7 +13,7 @@ async function notifyAutoBanSuccess(championId: number) {
   try {
     await lcu.sendChampSelectMessage(msg, 'celebration')
   } catch {
-    // 聊天室未就绪时静默忽略。
+    // Ignore silently before chat is ready.
   }
 }
 
@@ -75,7 +75,7 @@ async function tryAutoBanChampion() {
     return
   }
 
-  // Ban 阶段通常很早出现，保留 5 分钟轮询以兼容排位 BP 的完整流程。
+  // Ban phase can start early; keep a 5-minute poll window for the full ranked BP flow.
   for (let attempt = 0; attempt < 300; attempt++) {
     try {
       const session = await lcu.getChampSelectSession()

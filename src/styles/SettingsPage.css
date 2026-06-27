@@ -67,14 +67,14 @@
   scroll-margin-top: 58px;
 }
 
-/* ---- 调试页按钮行 ---- */
+/* ---- Debug action row ---- */
 .sonaenhance-debug-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-/* ---- 调试输出区 ---- */
+/* ---- Debug output ---- */
 .sonaenhance-debug-output {
   margin-top: 20px;
   padding: 16px;
@@ -108,7 +108,7 @@
   line-height: 1.6;
 }
 
-/* ---- 英雄联想下拉 ---- */
+/* ---- Champion suggestions ---- */
 .sonaenhance-champ-suggest {
   position: absolute;
   top: calc(100% + 4px);
@@ -162,7 +162,7 @@
   color: #a09b8c;
 }
 
-/* ---- 英雄优先级队列 ---- */
+/* ---- Champion priority queue ---- */
 .sonaenhance-champ-priority-list {
   display: flex;
   flex-wrap: wrap;
@@ -235,7 +235,7 @@
   color: #f0e6d2;
 }
 
-/* ---- 设置备份列表 ---- */
+/* ---- Settings backup list ---- */
 .sonaenhance-backup-item {
   display: flex;
   align-items: center;

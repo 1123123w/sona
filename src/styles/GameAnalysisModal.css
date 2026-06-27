@@ -1,4 +1,4 @@
-/* ==================== 对局战力分析弹窗 ==================== */
+/* ==================== Game Analysis Modal ==================== */
 
 .sga-container {
   display: flex;
@@ -103,7 +103,7 @@
   font-size: 14px;
 }
 
-/* ---- 双栏队伍 ---- */
+/* ---- Two-column teams ---- */
 
 .sga-teams {
   display: flex;
@@ -184,7 +184,7 @@
 .sga-team-players::-webkit-scrollbar-track { background: rgba(1, 10, 19, 0.8); }
 .sga-team-players::-webkit-scrollbar-thumb { background: #3c2e16; border-radius: 2px; }
 
-/* ---- 玩家卡片（含近期战绩） ---- */
+/* ---- Player card with recent matches ---- */
 
 .sga-player-wrapper {
   position: relative;
@@ -248,7 +248,7 @@
   text-align: right;
 }
 
-/* ---- 英雄头像 ---- */
+/* ---- Champion avatar ---- */
 
 .sga-player-champ {
   width: 40px;
@@ -273,7 +273,7 @@
   background: #1e2328;
 }
 
-/* ---- 玩家信息 (名称 + 段位) ---- */
+/* ---- Player info ---- */
 
 .sga-player-info {
   width: 200px;
@@ -351,7 +351,7 @@
   font-weight: 400;
 }
 
-/* ---- 胜率 ---- */
+/* ---- Win rate ---- */
 
 .sga-player-winrate {
   flex: 1;
@@ -431,7 +431,7 @@
   font-weight: 600;
 }
 
-/* ---- 近期战绩 ---- */
+/* ---- Recent matches ---- */
 
 .sga-recent {
   position: relative;

@@ -490,7 +490,7 @@ function RuneSection({ title, runes, championName, modeLabel }: { title: string;
       try {
         await lcu.sendChampSelectMessage(`${championName} ${modeLabel} 符文已应用 - Sona-E`, 'celebration')
       } catch {
-        // 非选人阶段或聊天室未就绪时忽略
+        // Ignore outside ChampSelect or before chat is ready.
       }
     } catch {
       setApplyErrorKey(key)

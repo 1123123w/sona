@@ -5,9 +5,9 @@ import { lcu, LcuEventUri } from '@/lib/lcu'
 import type { LCUEventMessage, GameflowPhase } from '@/lib/lcu'
 import { injector } from '@/lib/InjectorManager'
 
-// ==================== 进入游戏自动弹窗战力分析 ====================
+// ==================== Auto Show Game Analysis Popup ====================
 
-/** GameAnalysisModal 的独立 React root */
+/** Dedicated React root for GameAnalysisModal. */
 let gameAnalysisRoot: Root | null = null
 let gameAnalysisContainer: HTMLDivElement | null = null
 let gameAnalysisModalLoadPromise: Promise<typeof import('@/components/ui/GameAnalysisModal')['GameAnalysisModal']> | null = null
@@ -51,19 +51,19 @@ function cleanupGameAnalysisModal() {
   }
 }
 
-// ---- 客户端内嵌按钮 ----
+// ---- Embedded Client Button ----
 
 const GAME_ANALYSIS_BTN_ATTR = 'data-sonaenhance-game-analysis'
 
 /**
- * 注入任务：在 game-in-progress-container 中注入"对局分析"按钮
- * 直接使用客户端原生的 <lol-uikit-flat-button>，自带官方金色边框、hover 动效、点击反馈
+ * Injection task: inject the analysis button into game-in-progress-container.
+ * Uses the client's native <lol-uikit-flat-button> for official styling and interaction.
  */
 function tryInjectGameAnalysisButton(): boolean {
   const container = document.querySelector('.game-in-progress-container')
   if (!container) return false
 
-  // 已注入过，跳过
+  // Already injected.
   if (container.querySelector(`[${GAME_ANALYSIS_BTN_ATTR}]`)) return true
 
   const btn = document.createElement('lol-uikit-flat-button')
@@ -83,14 +83,14 @@ function tryInjectGameAnalysisButton(): boolean {
   return true
 }
 
-/** 清理客户端内嵌按钮 */
+/** Remove the embedded client button. */
 function cleanupGameAnalysisButton() {
   document.querySelectorAll(`[${GAME_ANALYSIS_BTN_ATTR}]`).forEach((el) => el.remove())
 }
 
 let gameAnalysisBtnRegistered = false
 
-/** 跟踪当前游戏 ID，确保每局只弹一次 */
+/** Track the current game ID so each game opens the popup once. */
 let lastPopupGameId = 0
 
 let gameAnalysisPopupUnsub: (() => void) | null = null
@@ -100,12 +100,12 @@ export function updateGameAnalysisPopup(enabled: boolean) {
     gameAnalysisPopupUnsub = lcu.observe(LcuEventUri.GAMEFLOW_PHASE_CHANGE, (event: LCUEventMessage) => {
       const phase = event.data as GameflowPhase
       if (phase === 'InProgress') {
-        // 注册内嵌按钮注入
+        // Register embedded button injection.
         if (!gameAnalysisBtnRegistered) {
           injector.register(tryInjectGameAnalysisButton)
           gameAnalysisBtnRegistered = true
         }
-        // 查询当前 gameId 避免重连时重复弹窗
+        // Query current gameId to avoid duplicate popups after reconnects.
         lcu.getGameflowSession()
           .then((session) => {
             const gid = session.gameData?.gameId ?? 0
@@ -115,14 +115,13 @@ export function updateGameAnalysisPopup(enabled: boolean) {
             }
           })
           .catch(() => {
-            // session 查询失败也尝试弹窗（可能是自定义等特殊情况）
+            // Still try to show the popup if session query fails, such as in custom games.
             void showGameAnalysisModal()
           })
       } else if (phase === 'WaitingForStats' || phase === 'PreEndOfGame' || phase === 'EndOfGame') {
-        // 游戏已结束（WaitingForStats / PreEndOfGame / EndOfGame / None / Lobby 等）
-        // 重置状态并关闭弹窗
+        // Game has ended; reset state and close the popup.
         lastPopupGameId = 0
-        // 取消按钮注入
+        // Cancel button injection.
         if (gameAnalysisBtnRegistered) {
           injector.unregister(tryInjectGameAnalysisButton)
           gameAnalysisBtnRegistered = false

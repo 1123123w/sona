@@ -2,13 +2,13 @@ import { logger } from '@/index'
 import { lcu } from '@/lib/lcu'
 import { injector } from '@/lib/InjectorManager'
 
-// ==================== 大乱斗无CD换英雄 ====================
+// ==================== ARAM Bench No Cooldown ====================
 
 const BENCH_HIJACK_ATTR = 'data-sonaenhance-bench-hijacked'
 
 /**
- * 从 champion-bench-item 的 background-image 中提取英雄 ID
- * URL 格式: url('/lol-game-data/assets/v1/champion-icons/102.png')
+ * Extract champion ID from champion-bench-item background-image.
+ * URL format: url('/lol-game-data/assets/v1/champion-icons/102.png')
  */
 function extractChampionId(item: Element): number | null {
   const iconEl = item.querySelector('.bench-champion-background') as HTMLElement | null
@@ -19,15 +19,15 @@ function extractChampionId(item: Element): number | null {
 }
 
 /**
- * 注入任务：
- * 1. 移除 on-cooldown 类名和遮罩（视觉）
- * 2. 接管点击事件，直接调 LCU API 换英雄（逻辑）
+ * Injection task:
+ * 1. Remove the on-cooldown class and overlay visually.
+ * 2. Take over click handling and call the LCU swap API directly.
  */
 function tryHijackBenchItems(): boolean {
   const container = document.querySelector('.bench-container')
   if (!container) return true
 
-  // 视觉：移除 on-cooldown 类名和遮罩
+  // Visual: remove the on-cooldown class and overlay.
   container.querySelectorAll('[class*="on-cooldown"]').forEach((el) => {
     const toRemove = Array.from(el.classList).filter((c) => c.startsWith('on-cooldown'))
     toRemove.forEach((c) => el.classList.remove(c))
@@ -35,9 +35,9 @@ function tryHijackBenchItems(): boolean {
     if (mask instanceof HTMLElement) mask.style.display = 'none'
   })
 
-  // 逻辑：接管未被接管的 bench item 的点击事件
+  // Logic: take over click events for bench items not yet handled by us.
   container.querySelectorAll(`.champion-bench-item:not([${BENCH_HIJACK_ATTR}])`).forEach((item) => {
-    // 跳过空位和锁定位
+    // Skip empty or locked slots.
     if (item.classList.contains('empty-bench-item') || item.classList.contains('locked-out')) return
 
     item.setAttribute(BENCH_HIJACK_ATTR, 'true')
