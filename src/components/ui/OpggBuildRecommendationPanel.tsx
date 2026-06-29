@@ -22,7 +22,7 @@ import {
 } from '@/lib/assets'
 import { lcu } from '@/lib/lcu'
 import { applyOpggRunePage } from '@/lib/opgg-runes'
-import { type OpggItemBuild, type OpggMode, type OpggPosition, type OpggRuneBuild, type OpggTier } from '@/lib/opgg-api'
+import { type OpggItemBuild, type OpggItemDepthGroup, type OpggMode, type OpggPosition, type OpggRuneBuild, type OpggTier } from '@/lib/opgg-api'
 import '@/styles/OpggBuildRecommendationPanel.css'
 
 const MAX_RECOMMENDATION_ROWS = 3
@@ -75,6 +75,8 @@ export interface BuildRecommendation {
   coreItems: OpggItemBuild[]
   prismItems: OpggItemBuild[]
   lastItems: OpggItemBuild[]
+  itemDepthItems: OpggItemDepthGroup[]
+  itemBuildPaths: OpggItemDepthGroup[]
   runePages: OpggRuneBuild[]
   matchups: Array<{
     championId: number
@@ -162,7 +164,7 @@ export function OpggBuildRecommendationPanel({
         </div>
 
         <div className="sobp-trend-wrap">
-          <LastItemTrendSection title="出装趋势" builds={recommendation?.lastItems} />
+          <ItemDepthTrendSection depthGroups={recommendation?.itemDepthItems} fallbackBuilds={recommendation?.lastItems} />
         </div>
 
         <MatchupSection title="优势 / 劣势对局" matchups={recommendation?.matchups} />
@@ -398,6 +400,60 @@ function LastItemTrendSection({ title, builds }: { title: string; builds?: OpggI
   )
 }
 
+function ItemDepthTrendSection({ depthGroups, fallbackBuilds }: { depthGroups?: OpggItemDepthGroup[]; fallbackBuilds?: OpggItemBuild[] }) {
+  const groups = [4, 5, 6]
+    .map((depth) => ({
+      depth,
+      title: getItemDepthTitle(depth),
+      items: depthGroups?.find((group) => group.depth === depth)?.items.slice(0, 5) ?? [],
+    }))
+    .filter((group) => group.items.length > 0)
+
+  if (groups.length === 0) {
+    return <LastItemTrendSection title="出装趋势" builds={fallbackBuilds} />
+  }
+
+  return (
+    <Section title="后续装备" empty={false}>
+      <div className="sobp-depth-items">
+        {groups.map((group) => (
+          <div className="sobp-depth-group" key={group.depth}>
+            <div className="sobp-depth-title">{group.title}</div>
+            <div className="sobp-depth-list">
+              {group.items.map((build, index) => {
+                const id = build.ids[0] ?? 0
+                const item = getItemInfo(id)
+                return (
+                  <div className="sobp-depth-item" key={`${group.depth}-${index}-${build.ids.join('-')}`}>
+                    <BuildIcon src={item.iconPath} title={item.name} description={item.description} price={item.price} size={32} />
+                    <div className="sobp-depth-item-meta">
+                      <span>{formatPercent(getItemBuildWinRate(build))}</span>
+                      <small>{build.play.toLocaleString()}场</small>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Section>
+  )
+}
+
+function getItemDepthTitle(depth: number): string {
+  switch (depth) {
+    case 4:
+      return '第四件装备'
+    case 5:
+      return '第五件装备'
+    case 6:
+      return '第六件装备'
+    default:
+      return `第${depth}件装备`
+  }
+}
+
 function SpellSection({ title, builds, limit }: { title: string; builds?: OpggItemBuild[]; limit: number }) {
   const visibleBuilds = builds?.slice(0, limit) ?? []
   const maxRate = getMaxPickRate(visibleBuilds, 1)
@@ -598,6 +654,10 @@ function formatAugmentWinRateText(augment: { pickRate: number; winRate?: number 
 
 function RankBadge({ rank }: { rank: number }) {
   return <div className={`sobp-rank${rank === 1 ? ' sobp-rank--first' : ''}`}>#{rank}</div>
+}
+
+function getItemBuildWinRate(build: OpggItemBuild): number {
+  return build.play > 0 ? build.win / build.play : 0
 }
 
 function StatBar({ value, maxRate }: { value?: number; maxRate: number }) {

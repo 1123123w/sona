@@ -1,20 +1,22 @@
 {
   "name": "sonaenhance",
   "private": true,
-  "version": "1.3.3",
+  "version": "1.3.4",
   "type": "module",
   "description": "Sona-E - A League of Legends client plugin for Pengu Loader",
   "license": "AGPL-3.0",
   "config": {
     "pluginName": "sonaenhance",
-    "loaderPath": "../../"
+    "loaderPath": "C:/Program Files/Pengu Loader"
   },
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "build:plugin": "tsc && vite build --mode plugin",
     "preview": "vite preview",
-    "update-balance": "tsx scripts/update-champion-balance.ts"
+    "update-balance": "tsx scripts/update-champion-balance.ts",
+    "cleanup:sona-itemsets": "tsx scripts/cleanup-sona-itemsets.ts",
+    "cleanup:sona-itemsets:watch": "tsx scripts/cleanup-sona-itemsets.ts --watch"
   },
   "dependencies": {
     "react": "^19.1.0",

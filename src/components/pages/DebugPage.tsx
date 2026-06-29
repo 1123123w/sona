@@ -9,7 +9,7 @@ import { store } from '@/lib/store'
 import { lcu, SGP_SERVERS } from '@/lib/lcu'
 import { aramggApi } from '@/lib/aramgg-api'
 import { searchChampions, type ChampionInfo, getChampionBalanceMeta, getAllChampionBalances } from '@/lib/assets'
-import { openOpggBuildRecommendationDebugPanel } from '@/lib/features/opgg-build-recommendation'
+import { getOpggItemSetDiagnostics, openOpggBuildRecommendationDebugPanel } from '@/lib/features/opgg-build-recommendation'
 import { OPGG_DATA_REGION, opggApi } from '@/lib/opgg-api'
 import { logger } from '@/index'
 import '@/styles/SettingsPage.css'
@@ -551,6 +551,9 @@ export function DebugPage() {
             fetchOpggJson('/api/contents/aram-balance')
           )}>
             ARAM Balance
+          </SonaButton>
+          <SonaButton onClick={() => runAndLog('OP.GG 装备页诊断', getOpggItemSetDiagnostics)}>
+            装备页诊断
           </SonaButton>
           <SonaButton onClick={() => runAndLog('ARAMGG 海克斯原始统计', fetchAramggAugmentsStats)}>
             ARAMGG 海克斯统计

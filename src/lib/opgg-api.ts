@@ -326,6 +326,31 @@ export interface OpggGetChampionOptions extends OpggRequestOptions {
   version?: string
 }
 
+export interface OpggItemDepthGroup {
+  depth: number
+  items: OpggItemBuild[]
+}
+
+export interface OpggChampionBuildsData {
+  single_items: OpggItemDepthGroup[]
+  combination_items: OpggItemDepthGroup[]
+  last_items_참고용?: OpggItemBuild[]
+  single_runes?: unknown
+}
+
+export interface OpggChampionBuilds {
+  data: OpggChampionBuildsData
+}
+
+export interface OpggGetChampionBuildsOptions extends OpggRequestOptions {
+  id: number
+  region: OpggRegion
+  mode: OpggMode
+  tier: OpggTier
+  position: OpggPosition
+  version?: string
+}
+
 export class OpggApiError extends Error {
   readonly url: string
   readonly status?: number
@@ -386,6 +411,19 @@ export class OpggDataApi {
       getChampionCacheKey(options),
       isValidChampion,
       () => this.request(path, {
+        params: { tier, version },
+        signal,
+        timeoutMs,
+      }),
+    )
+  }
+
+  async getChampionBuilds(options: OpggGetChampionBuildsOptions): Promise<OpggChampionBuilds> {
+    const { id, region, mode, tier, position, version, signal, timeoutMs } = options
+    return withOpggCache(
+      getChampionBuildsCacheKey(options),
+      isValidChampionBuilds,
+      () => this.request(`/api/${region}/champions/${mode}/${id}/${position}/builds`, {
         params: { tier, version },
         signal,
         timeoutMs,
@@ -462,6 +500,11 @@ function getChampionCacheKey(options: OpggGetChampionOptions): string {
   return `${OPGG_CACHE_PREFIX}champion:${options.region}:${options.mode}:${options.id}:${position}:${options.tier}:${version}`
 }
 
+function getChampionBuildsCacheKey(options: OpggGetChampionBuildsOptions): string {
+  const version = options.version || 'latest'
+  return `${OPGG_CACHE_PREFIX}champion-builds:${options.region}:${options.mode}:${options.id}:${options.position}:${options.tier}:${version}`
+}
+
 async function withOpggCache<T>(
   key: string,
   validate: (value: unknown) => value is T,
@@ -516,6 +559,12 @@ function isValidChampionsTier(value: unknown): value is OpggChampionsTier {
 
 function isValidChampion(value: unknown): value is OpggChampion {
   return Boolean(value && typeof value === 'object' && (value as { data?: unknown }).data && (value as { meta?: unknown }).meta)
+}
+
+function isValidChampionBuilds(value: unknown): value is OpggChampionBuilds {
+  if (!value || typeof value !== 'object') return false
+  const data = (value as { data?: unknown }).data
+  return Boolean(data && typeof data === 'object' && Array.isArray((data as { single_items?: unknown }).single_items))
 }
 
 export function clearOpggCache(): number {

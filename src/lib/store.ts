@@ -86,6 +86,8 @@ export interface SonaConfig {
   }>>
   /** OP.GG recommendation tier filter. */
   opggBuildRecommendationTier: string
+  /** Default OP.GG recommendation position when champ select does not provide one. */
+  opggBuildRecommendationDefaultPosition: string
   /** Analyze ally strength in champ select. */
   analyzeTeamPower: boolean
   /** Ally analysis message type. */
@@ -180,6 +182,7 @@ export const SETTING_KEYS = {
   opggAutoApplyRunes: 'opggAutoApplyRunes',
   smartBuildRecommendation: 'smartBuildRecommendation',
   opggBuildRecommendationTier: 'opggBuildRecommendationTier',
+  opggBuildRecommendationDefaultPosition: 'opggBuildRecommendationDefaultPosition',
   champSelectCounterRecommendation: 'champSelectCounterRecommendation',
 } as const satisfies Record<string, ConfigKey>
 
@@ -195,6 +198,7 @@ export const HIGH_RISK_SETTING_DEFINITIONS = [
   defineSetting({ key: SETTING_KEYS.opggAutoApplyRunes, default: false, type: 'boolean', feature: 'opgg' }),
   defineSetting({ key: SETTING_KEYS.smartBuildRecommendation, default: true, type: 'boolean', feature: 'opgg' }),
   defineSetting({ key: SETTING_KEYS.opggBuildRecommendationTier, default: 'emerald_plus', type: 'string', feature: 'opgg' }),
+  defineSetting({ key: SETTING_KEYS.opggBuildRecommendationDefaultPosition, default: 'mid', type: 'string', feature: 'opgg' }),
   defineSetting({ key: SETTING_KEYS.champSelectCounterRecommendation, default: false, type: 'boolean', feature: 'counter' }),
 ] as const
 

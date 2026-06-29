@@ -26,6 +26,8 @@ import {
   type OpggAugmentGroup,
   type OpggArenaModeChampion,
   type OpggChampion,
+  type OpggChampionBuilds,
+  type OpggItemDepthGroup,
   type OpggMode,
   type OpggNormalModeChampion,
   type OpggPosition,
@@ -40,13 +42,13 @@ const PANEL_ID = 'sonaenhance-opgg-build-panel'
 const DEFAULT_OPGG_TIER: OpggTier = 'master_plus'
 const SONA_ITEM_SET_TITLE_PREFIX = '[Sona-E]'
 const HEALTH_POTION_ID = 2003
-const ITEM_SET_ASSOCIATED_MAPS = [11, 12, 30]
 const RUNE_APPLY_SUPPRESS_MS = 1500
 const RUNE_PAGE_POLL_INTERVAL_MS = 1000
 const RUNE_SAVE_CHAT_DEDUPE_MS = 2000
 const SPELL_APPLY_SUPPRESS_MS = 1500
 const SMART_LOADOUT_RESTORE_DEBOUNCE_MS = 500
 const CHAMP_SELECT_REARM_INTERVAL_MS = 1000
+const ITEM_SET_LCU_EXPORT_CLEANUP_DELAY_MS = 1500
 const RANKED_ALL_POSITIONS: OpggPosition[] = ['top', 'jungle', 'mid', 'adc', 'support']
 const SELECTABLE_OPGG_TIERS: OpggTier[] = [
   'all',
@@ -265,9 +267,7 @@ function getAugmentGroups(data: OpggChampion): OpggAugmentGroup[] {
 
 function getRecommendationCacheKey(context: RecommendationContext): string {
   const mode = resolveOpggMode(context)
-  const position = mode === 'ranked'
-    ? (context.position === 'none' ? 'mid' : context.position)
-    : 'none'
+  const position = getEffectiveOpggPosition(context, mode)
   const tier = getEffectiveOpggTier(context)
 
   return [
@@ -287,6 +287,16 @@ function normalizeOpggTier(value: string): OpggTier {
 
 function getSelectedOpggTier(): OpggTier {
   return normalizeOpggTier(store.get(SETTING_KEYS.opggBuildRecommendationTier))
+}
+
+function getDefaultOpggPosition(): OpggPosition {
+  const position = store.get(SETTING_KEYS.opggBuildRecommendationDefaultPosition)
+  return RANKED_ALL_POSITIONS.includes(position as OpggPosition) ? position as OpggPosition : 'mid'
+}
+
+function getEffectiveOpggPosition(context: RecommendationContext, mode = resolveOpggMode(context)): OpggPosition {
+  if (mode !== 'ranked') return 'none'
+  return context.position === 'none' ? getDefaultOpggPosition() : context.position
 }
 
 function getEffectiveOpggTier(context: RecommendationContext): OpggTier {
@@ -399,6 +409,10 @@ function flattenItemBuilds(builds: OpggItemBuild[]): number[] {
   return normalizeItemIds(builds.flatMap((build) => build.ids))
 }
 
+function flattenItemDepthGroup(group: OpggItemDepthGroup | undefined): number[] {
+  return group ? flattenItemBuilds(group.items.slice(0, 8)) : []
+}
+
 function getItemBuildWinRate(build: OpggItemBuild): number {
   return build.play > 0 ? build.win / build.play : 0
 }
@@ -454,13 +468,20 @@ function buildItemSetBlocks(recommendation: BuildRecommendation): ItemSetBlock[]
     appendItemSetBlock(blocks, `${blocks.length + 1}. 核心装 ${index + 1}`, build.ids)
   })
 
-  appendItemSetBlock(blocks, `${blocks.length + 1}. 后续装备`, sortItemIdsByPriceDesc(flattenItemBuilds(lastItems)))
+  const fourthItems = recommendation.itemDepthItems.find((group) => group.depth === 4)
+  const fifthItems = recommendation.itemDepthItems.find((group) => group.depth === 5)
+  const sixthItems = recommendation.itemDepthItems.find((group) => group.depth === 6)
+  appendItemSetBlock(blocks, `${blocks.length + 1}. 第四件装备`, flattenItemDepthGroup(fourthItems))
+  appendItemSetBlock(blocks, `${blocks.length + 1}. 第五件装备`, flattenItemDepthGroup(fifthItems))
+  appendItemSetBlock(blocks, `${blocks.length + 1}. 第六件装备`, flattenItemDepthGroup(sixthItems))
+
+  appendItemSetBlock(blocks, `${blocks.length + 1}. 备选装备`, sortItemIdsByPriceDesc(flattenItemBuilds(lastItems)))
 
   return blocks
 }
 
 function getManagedItemSetUid(context: RecommendationContext): string {
-  return ['sonaenhance', context.championId, resolveOpggMode(context), context.position].join('-')
+  return ['sonaenhance', context.championId].join('-')
 }
 
 function getChampionName(championId: number): string {
@@ -489,7 +510,7 @@ function getPositionLabel(position: OpggPosition): string {
 
 function getManagedItemSetTitle(context: RecommendationContext, recommendation: BuildRecommendation): string {
   const championName = getChampionName(context.championId)
-  const positionLabel = getPositionLabel(context.position)
+  const positionLabel = getPositionLabel(recommendation.position)
   const suffix = positionLabel ? `${recommendation.modeLabel}/${positionLabel}` : recommendation.modeLabel
   return `${SONA_ITEM_SET_TITLE_PREFIX} ${championName} - ${suffix}`
 }
@@ -504,6 +525,13 @@ function getSmartRunePageName(context: RecommendationContext): string {
   return `${getChampionName(context.championId)} ${getModeLabel(resolveOpggMode(context), context)} - Sona-E`
 }
 
+function getItemSetAssociatedMaps(context: RecommendationContext): number[] {
+  const mode = resolveOpggMode(context)
+  if (mode === 'aram') return [12]
+  if (mode === 'arena') return [30]
+  return [11]
+}
+
 function createManagedItemSet(context: RecommendationContext, recommendation: BuildRecommendation): ItemSet | null {
   const blocks = buildItemSetBlocks(recommendation)
   if (blocks.length === 0) return null
@@ -515,7 +543,7 @@ function createManagedItemSet(context: RecommendationContext, recommendation: Bu
     mode: 'any',
     map: 'any',
     associatedChampions: [context.championId],
-    associatedMaps: ITEM_SET_ASSOCIATED_MAPS,
+    associatedMaps: getItemSetAssociatedMaps(context),
     blocks,
     preferredItemSlots: [],
     sortrank: 0,
@@ -527,13 +555,74 @@ function isSameManagedItemSetContext(itemSet: ItemSet, nextItemSet: ItemSet): bo
   return itemSet.uid === nextItemSet.uid
 }
 
-function shouldExpandAllPositions(context: RecommendationContext): boolean {
-  return resolveOpggMode(context) === 'ranked' && context.position === 'none'
+function isManagedItemSetForChampion(itemSet: ItemSet, championId: number): boolean {
+  const uid = ['sonaenhance', championId].join('-')
+  return itemSet.uid === uid
+    || itemSet.uid.startsWith(`${uid}-`)
+    || (Array.isArray(itemSet.associatedChampions) && itemSet.associatedChampions.includes(championId))
+}
+
+function isManagedSonaItemSet(itemSet: ItemSet): boolean {
+  return itemSet.uid.startsWith('sonaenhance-') || itemSet.title.startsWith(SONA_ITEM_SET_TITLE_PREFIX)
+}
+
+function getItemSetSignature(itemSet: ItemSet): string {
+  return [
+    itemSet.uid,
+    itemSet.title,
+    ...itemSet.blocks.map((block) => `${block.type}:${block.items.map((item) => `${item.id}x${item.count}`).join(',')}`),
+  ].join('|')
+}
+
+function hasAppliedItemSets(existingItemSets: ItemSet[], nextItemSets: ItemSet[]): boolean {
+  if (existingItemSets.length !== nextItemSets.length) return false
+  return nextItemSets.every((nextItemSet) => {
+    const existingItemSet = existingItemSets.find((itemSet) => isSameManagedItemSetContext(itemSet, nextItemSet))
+    return existingItemSet ? getItemSetSignature(existingItemSet) === getItemSetSignature(nextItemSet) : false
+  })
+}
+
+function scheduleRemoveManagedItemSetsFromLcu(summonerId: number, accountId: number): void {
+  window.setTimeout(() => {
+    lcu.getItemSets(summonerId)
+      .then((wrapper) => {
+        const existingItemSets = Array.isArray(wrapper?.itemSets) ? wrapper.itemSets : []
+        const itemSets = existingItemSets.filter((itemSet) => !isManagedSonaItemSet(itemSet))
+        if (itemSets.length === existingItemSets.length) return null
+
+        return lcu.putItemSets(summonerId, {
+          accountId: wrapper?.accountId ?? accountId,
+          itemSets,
+          timestamp: Date.now(),
+        })
+      })
+      .then((result) => {
+        if (result) logger.info('[OPGG] 已移除 LCU Sona-E 装备页，避免游戏内商店双来源重复')
+      })
+      .catch((err) => {
+        logger.warn('[OPGG] LCU Sona-E 装备页导出后清理失败:', err)
+      })
+  }, ITEM_SET_LCU_EXPORT_CLEANUP_DELAY_MS)
+}
+
+export async function getOpggItemSetDiagnostics() {
+  const summoner = await lcu.getSummonerInfo()
+  const wrapper = await lcu.getItemSets(summoner.summonerId)
+  const itemSets = Array.isArray(wrapper?.itemSets) ? wrapper.itemSets : []
+  const managedItemSets = itemSets.filter(isManagedSonaItemSet)
+
+  return {
+    summonerId: summoner.summonerId,
+    accountId: wrapper?.accountId ?? summoner.accountId ?? 0,
+    totalItemSets: itemSets.length,
+    sonaItemSets: managedItemSets.length,
+    sonaTitles: managedItemSets.map((itemSet) => itemSet.title),
+    note: '游戏内商店还会读取 Game/Config/Champions/*/Recommended/*.json；本地文件数量请运行 npm run cleanup:sona-itemsets 诊断。',
+  }
 }
 
 function getItemSetContexts(context: RecommendationContext): RecommendationContext[] {
-  if (!shouldExpandAllPositions(context)) return [context]
-  return RANKED_ALL_POSITIONS.map((position) => ({ ...context, position }))
+  return [context]
 }
 
 function isCurrentRecommendationContext(context: RecommendationContext): boolean {
@@ -667,15 +756,27 @@ async function upsertRecommendedItemSet(context: RecommendationContext, recommen
   const summoner = await lcu.getSummonerInfo()
   const wrapper = await lcu.getItemSets(summoner.summonerId)
   const existingItemSets = Array.isArray(wrapper?.itemSets) ? wrapper.itemSets : []
-  const itemSets = existingItemSets.filter((itemSet) => !nextItemSets.some((nextItemSet) => isSameManagedItemSetContext(itemSet, nextItemSet)))
+  const itemSets = existingItemSets.filter((itemSet) => !isManagedSonaItemSet(itemSet))
 
   await lcu.putItemSets(summoner.summonerId, {
     accountId: wrapper?.accountId ?? summoner.accountId ?? 0,
     itemSets: [...itemSets, ...nextItemSets],
     timestamp: Date.now(),
   })
+  scheduleRemoveManagedItemSetsFromLcu(summoner.summonerId, wrapper?.accountId ?? summoner.accountId ?? 0)
 
-  logger.info('[OPGG] 自动装备集已同步：%d 个', nextItemSets.length)
+  const verifiedWrapper = await lcu.getItemSets(summoner.summonerId).catch((err) => {
+    logger.warn('[OPGG] 自动装备集写入后校验失败:', err)
+    return null
+  })
+  const verifiedItemSets = Array.isArray(verifiedWrapper?.itemSets) ? verifiedWrapper.itemSets : []
+  const managedItemSets = verifiedItemSets.filter(isManagedSonaItemSet)
+  if (!hasAppliedItemSets(managedItemSets, nextItemSets)) {
+    logger.warn('[OPGG] 自动装备集写入后未在客户端确认，本次选人不再重复写入')
+    return
+  }
+
+  logger.info('[OPGG] 自动装备集已同步：%d 个，LCU Sona-E 装备页总数：%d', nextItemSets.length, managedItemSets.length)
   const championName = getChampionName(context.championId)
   lcu.sendChampSelectMessage(`${championName} 出装已配备 - Sona-E`, 'celebration').catch((err) => {
     logger.warn('[OPGG] 自动装备集聊天提示发送失败:', err)
@@ -686,24 +787,24 @@ function syncRecommendedItemSetWhenReady(entry: RecommendationCacheEntry): void 
   if (!store.get(SETTING_KEYS.smartBuildRecommendation)) return
   if (!currentChampionLocked) return
 
-  const syncKey = getItemSetContexts(entry.context).map(getManagedItemSetUid).join('|')
-  if (lastAppliedItemSetKey === syncKey || itemSetSyncInFlightKeys.has(syncKey)) return
+  const contextSyncKey = getItemSetContexts(entry.context).map(getManagedItemSetUid).join('|')
+  if (lastAppliedItemSetKey === contextSyncKey || itemSetSyncInFlightKeys.has(contextSyncKey)) return
 
-  itemSetSyncInFlightKeys.add(syncKey)
+  itemSetSyncInFlightKeys.add(contextSyncKey)
   entry.promise
     .then(async (recommendation) => {
       if (!recommendation || !store.get(SETTING_KEYS.smartBuildRecommendation)) return
       if (!currentChampionLocked) return
       if (!isCurrentRecommendationContext(entry.context)) return
-      if (lastAppliedItemSetKey === syncKey) return
+      if (lastAppliedItemSetKey === contextSyncKey) return
       await upsertRecommendedItemSet(entry.context, recommendation)
-      lastAppliedItemSetKey = syncKey
+      lastAppliedItemSetKey = contextSyncKey
     })
     .catch((err) => {
       logger.warn('[OPGG] 自动装备集同步失败:', err)
     })
     .finally(() => {
-      itemSetSyncInFlightKeys.delete(syncKey)
+      itemSetSyncInFlightKeys.delete(contextSyncKey)
     })
 }
 
@@ -933,19 +1034,27 @@ async function loadRecommendation(context: RecommendationContext): Promise<Build
   if (context.championId <= 0) return null
 
   const mode = resolveOpggMode(context)
-  const position = mode === 'ranked' ? (context.position === 'none' ? 'mid' : context.position) : 'none'
+  const position = getEffectiveOpggPosition(context, mode)
   const tier = getEffectiveOpggTier(context)
 
   if (isKiwiMode(context)) {
     return loadAramggKiwiRecommendation(context, mode, position, tier)
   }
 
-  const mainChampion = await getChampionWithVersionFallback({
-    id: context.championId,
-    mode,
-    tier,
-    position,
-  })
+  const [mainChampion, championBuilds] = await Promise.all([
+    getChampionWithVersionFallback({
+      id: context.championId,
+      mode,
+      tier,
+      position,
+    }),
+    getChampionBuildsForRecommendation({
+      id: context.championId,
+      mode,
+      tier,
+      position,
+    }),
+  ])
 
   const augmentGroups = getAugmentGroups(mainChampion)
 
@@ -965,6 +1074,8 @@ async function loadRecommendation(context: RecommendationContext): Promise<Build
     coreItems: data.core_items ?? [],
     prismItems: arena?.data.prism_items ?? [],
     lastItems: data.last_items ?? [],
+    itemDepthItems: championBuilds?.data.single_items ?? [],
+    itemBuildPaths: championBuilds?.data.combination_items ?? [],
     runePages: normal?.data.runes ?? [],
     matchups: normal ? mapOpggMatchups(normal.data.counters) : [],
     augments: mapOpggAugments(augmentGroups),
@@ -1010,6 +1121,8 @@ async function loadAramggKiwiRecommendation(
     coreItems: mapAramggCoreItemBuilds(aramgg.coreItemBuilds),
     prismItems: [],
     lastItems: mapAramggItems(aramgg.items),
+    itemDepthItems: [],
+    itemBuildPaths: [],
     runePages: [],
     matchups: [],
     augments: mapAramggAugments(aramgg.augments, mayhemAugments),
@@ -1192,6 +1305,23 @@ async function getChampionWithVersionFallback(options: {
     if (!options.version) throw err
     logger.warn('[OPGG] 版本 %s 请求失败，回退到 OP.GG 最新版本:', options.version, err)
     return opggApi.getChampion({ ...options, region: OPGG_DATA_REGION, version: undefined })
+  }
+}
+
+async function getChampionBuildsForRecommendation(options: {
+  id: number
+  mode: OpggMode
+  tier: OpggTier
+  position: OpggPosition
+  version?: string
+}): Promise<OpggChampionBuilds | null> {
+  if (options.mode !== 'ranked') return null
+
+  try {
+    return await opggApi.getChampionBuilds({ ...options, region: OPGG_DATA_REGION })
+  } catch (err) {
+    logger.warn('[OPGG] 出装深度数据请求失败，将使用基础装备数据兜底:', err)
+    return null
   }
 }
 

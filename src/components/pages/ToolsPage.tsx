@@ -18,6 +18,14 @@ const toolSections = [
   { id: 'social', labelKey: 'tools.nav.social' },
 ]
 
+const opggPositionOptions = [
+  { value: 'top', label: '上路' },
+  { value: 'jungle', label: '打野' },
+  { value: 'mid', label: '中路' },
+  { value: 'adc', label: '下路' },
+  { value: 'support', label: '辅助' },
+]
+
 function scrollToToolSection(id: string) {
   document.getElementById(`tool-section-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
@@ -85,6 +93,7 @@ export function ToolsPage() {
   const [champSelectAssist, setChampSelectAssist] = useState(store.get('champSelectAssist'))
   const [opggBuildRecommendation, setOpggBuildRecommendation] = useState(store.get('opggBuildRecommendation'))
   const [opggAutoApplyRunes, setOpggAutoApplyRunes] = useState(store.get('opggAutoApplyRunes'))
+  const [opggDefaultPosition, setOpggDefaultPosition] = useState(store.get('opggBuildRecommendationDefaultPosition'))
   const [champSelectCounterRecommendation, setChampSelectCounterRecommendation] = useState(store.get('champSelectCounterRecommendation'))
   const [smartBuildRecommendation, setSmartBuildRecommendation] = useState(store.get('smartBuildRecommendation'))
   const [balanceBuffTooltip, setBalanceBuffTooltip] = useState(store.get('balanceBuffTooltip'))
@@ -136,6 +145,7 @@ export function ToolsPage() {
       store.onChange('champSelectAssist', setChampSelectAssist),
       store.onChange('opggBuildRecommendation', setOpggBuildRecommendation),
       store.onChange('opggAutoApplyRunes', setOpggAutoApplyRunes),
+      store.onChange('opggBuildRecommendationDefaultPosition', setOpggDefaultPosition),
       store.onChange('champSelectCounterRecommendation', setChampSelectCounterRecommendation),
       store.onChange('smartBuildRecommendation', setSmartBuildRecommendation),
       store.onChange('balanceBuffTooltip', setBalanceBuffTooltip),
@@ -436,6 +446,16 @@ export function ToolsPage() {
           <SonaSwitch
             checked={opggBuildRecommendation}
             onChange={(v) => { setOpggBuildRecommendation(v); store.set('opggBuildRecommendation', v) }}
+          />
+        </SettingCard>
+        <SettingCard
+          title="默认推荐分路"
+          description="客户端没有提供分路时，用这个分路获取 OP.GG 出装并写入游戏装备页。"
+        >
+          <SonaSelect
+            value={opggDefaultPosition}
+            onChange={(v) => { setOpggDefaultPosition(v); store.set('opggBuildRecommendationDefaultPosition', v) }}
+            options={opggPositionOptions}
           />
         </SettingCard>
         <SettingCard
